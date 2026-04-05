@@ -99,7 +99,17 @@ defmodule Hephaestus.Core.EngineTest do
 
       instance = Engine.activate_transitions(instance, :start, "done")
 
-      assert instance.active_steps == MapSet.new([:branch_a, :branch_b])
+      assert instance.active_steps == MapSet.new([:branch_a, :branch_b, :branch_c])
+    end
+
+    test "returns the instance unchanged when the emitted event has no matching transition" do
+      instance =
+        Instance.new(Hephaestus.Test.BranchWorkflow, %{})
+        |> Map.put(:status, :running)
+        |> Map.put(:active_steps, MapSet.new([:check]))
+        |> Map.put(:completed_steps, MapSet.new([:check]))
+
+      assert Engine.activate_transitions(instance, :check, "unknown_event") == instance
     end
 
     test "respects fan-in predecessors before activating join step" do
@@ -116,6 +126,13 @@ defmodule Hephaestus.Core.EngineTest do
         instance
         |> Map.put(:completed_steps, MapSet.new([:start, :branch_a, :branch_b]))
         |> Engine.activate_transitions(:branch_b, "done")
+
+      refute MapSet.member?(instance.active_steps, :join)
+
+      instance =
+        instance
+        |> Map.put(:completed_steps, MapSet.new([:start, :branch_a, :branch_b, :branch_c]))
+        |> Engine.activate_transitions(:branch_c, "done")
 
       assert MapSet.member?(instance.active_steps, :join)
     end
@@ -169,7 +186,7 @@ defmodule Hephaestus.Core.EngineTest do
         |> Map.put(:status, :waiting)
         |> Map.put(:current_step, :branch_a)
         |> Map.put(:active_steps, MapSet.new([:branch_b]))
-        |> Map.put(:completed_steps, MapSet.new([:start, :branch_a]))
+        |> Map.put(:completed_steps, MapSet.new([:start, :branch_a, :branch_c]))
 
       resumed = Engine.resume_step(instance, :branch_b, "done")
 
@@ -210,26 +227,150 @@ defmodule Hephaestus.Core.EngineTest do
       {:ok, instance} = Engine.advance(instance)
       instance = run_step(instance, :start, ~U[2026-04-04 22:30:00Z])
 
-      assert instance.active_steps == MapSet.new([:branch_a, :branch_b])
+      assert instance.active_steps == MapSet.new([:branch_a, :branch_b, :branch_c])
 
       instance = run_step(instance, :branch_a, ~U[2026-04-04 22:31:00Z])
       refute MapSet.member?(instance.active_steps, :join)
 
       instance = run_step(instance, :branch_b, ~U[2026-04-04 22:32:00Z])
+      refute MapSet.member?(instance.active_steps, :join)
+
+      instance = run_step(instance, :branch_c, ~U[2026-04-04 22:33:00Z])
       assert instance.active_steps == MapSet.new([:join])
 
-      instance = run_step(instance, :join, ~U[2026-04-04 22:33:00Z])
-      instance = run_step(instance, :finish, ~U[2026-04-04 22:34:00Z])
+      instance = run_step(instance, :join, ~U[2026-04-04 22:34:00Z])
+      instance = run_step(instance, :finish, ~U[2026-04-04 22:35:00Z])
       instance = Engine.check_completion(instance)
 
       assert instance.status == :completed
       assert %{processed: true} = instance.context.steps[:branch_a]
       assert %{processed: true} = instance.context.steps[:branch_b]
+      assert %{processed: true} = instance.context.steps[:branch_c]
+      assert MapSet.subset?(
+               MapSet.new([:start, :branch_a, :branch_b, :branch_c, :join, :finish]),
+               instance.completed_steps
+             )
       assert Enum.map(instance.execution_history, & &1.step_ref) == [
                :start,
                :branch_a,
                :branch_b,
+               :branch_c,
                :join,
+               :finish
+             ]
+    end
+
+    test "keeps mixed sync and async fan-out state separate until the async branch resumes" do
+      instance = Instance.new(Hephaestus.Test.MixedParallelWorkflow, %{})
+
+      {:ok, instance} = Engine.advance(instance)
+      instance = run_step(instance, :start, ~U[2026-04-04 23:00:00Z])
+
+      assert instance.active_steps == MapSet.new([:branch_async, :branch_sync])
+
+      instance = run_step(instance, :branch_sync, ~U[2026-04-04 23:01:00Z])
+
+      assert instance.active_steps == MapSet.new([:branch_async])
+      refute MapSet.member?(instance.active_steps, :join)
+      assert %{processed: true} = instance.context.steps[:branch_sync]
+
+      branch_async = instance.workflow.__step__(:branch_async)
+      assert {:async} = Engine.execute_step(instance, branch_async)
+
+      waiting =
+        instance
+        |> Map.put(:status, :waiting)
+        |> Map.put(:current_step, :branch_async)
+
+      resumed =
+        waiting
+        |> Engine.resume_step(:branch_async, "timeout")
+        |> append_execution_entry(:branch_async, "timeout", ~U[2026-04-04 23:02:00Z], %{})
+
+      assert resumed.status == :running
+      assert resumed.current_step == nil
+      assert resumed.active_steps == MapSet.new([:join])
+      assert MapSet.subset?(
+               MapSet.new([:start, :branch_sync, :branch_async]),
+               resumed.completed_steps
+             )
+    end
+  end
+
+  describe "advance/1 - event workflow" do
+    test "activates wait_for_event and returns async when the event step executes" do
+      instance = Instance.new(Hephaestus.Test.EventWorkflow, %{})
+
+      {:ok, instance} = Engine.advance(instance)
+      assert instance.status == :running
+      assert instance.active_steps == MapSet.new([:step_a])
+
+      instance = run_step(instance, :step_a, ~U[2026-04-04 22:40:00Z])
+
+      assert instance.status == :running
+      assert instance.active_steps == MapSet.new([:wait_for_event])
+
+      {:ok, advanced} = Engine.advance(instance)
+      wait_for_event = advanced.workflow.__step__(:wait_for_event)
+
+      assert {:async} = Engine.execute_step(advanced, wait_for_event)
+      assert advanced.active_steps == MapSet.new([:wait_for_event])
+    end
+
+    test "resume_step/3 activates step_b for payment_confirmed" do
+      instance =
+        Instance.new(Hephaestus.Test.EventWorkflow, %{})
+        |> Map.put(:status, :waiting)
+        |> Map.put(:current_step, :wait_for_event)
+        |> Map.put(:active_steps, MapSet.new([:wait_for_event]))
+        |> Map.put(:completed_steps, MapSet.new([:step_a]))
+
+      resumed = Engine.resume_step(instance, :wait_for_event, "payment_confirmed")
+
+      assert resumed.status == :running
+      assert resumed.current_step == nil
+      assert MapSet.member?(resumed.completed_steps, :wait_for_event)
+      refute MapSet.member?(resumed.active_steps, :wait_for_event)
+      assert resumed.active_steps == MapSet.new([:step_b])
+    end
+
+    test "completes the full event workflow manually after payment_confirmed" do
+      instance = Instance.new(Hephaestus.Test.EventWorkflow, %{order_id: 456})
+
+      {:ok, instance} = Engine.advance(instance)
+      instance = run_step(instance, :step_a, ~U[2026-04-04 22:50:00Z])
+
+      wait_for_event = instance.workflow.__step__(:wait_for_event)
+      assert {:async} = Engine.execute_step(instance, wait_for_event)
+
+      instance =
+        instance
+        |> Map.put(:status, :waiting)
+        |> Map.put(:current_step, :wait_for_event)
+
+      instance =
+        instance
+        |> Engine.resume_step(:wait_for_event, "payment_confirmed")
+        |> append_execution_entry(:wait_for_event, "payment_confirmed", ~U[2026-04-04 22:51:00Z], %{})
+
+      assert instance.status == :running
+      assert instance.active_steps == MapSet.new([:step_b])
+
+      instance = run_step(instance, :step_b, ~U[2026-04-04 22:52:00Z])
+      instance = run_step(instance, :finish, ~U[2026-04-04 22:53:00Z])
+      instance = Engine.check_completion(instance)
+
+      assert instance.status == :completed
+      assert MapSet.subset?(
+               MapSet.new([:step_a, :wait_for_event, :step_b, :finish]),
+               instance.completed_steps
+             )
+
+      assert %{processed: true} = instance.context.steps[:step_b]
+      assert Enum.map(instance.execution_history, & &1.step_ref) == [
+               :step_a,
+               :wait_for_event,
+               :step_b,
                :finish
              ]
     end

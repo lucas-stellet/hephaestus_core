@@ -1,6 +1,9 @@
 defmodule Hephaestus.Runtime.Runner.Local do
   @moduledoc """
   Local OTP runner that executes one workflow instance per GenServer process.
+
+  Crash recovery restores the latest persisted instance state from storage, but
+  `schedule_resume/3` timers are process-local and do not survive a runner crash.
   """
 
   use GenServer
@@ -21,6 +24,7 @@ defmodule Hephaestus.Runtime.Runner.Local do
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) do
     instance = Keyword.fetch!(opts, :instance)
+    instance_id = Keyword.get(opts, :instance_id, instance.id)
     registry = Keyword.fetch!(opts, :registry)
     storage = Keyword.fetch!(opts, :storage)
     task_supervisor = Keyword.fetch!(opts, :task_supervisor)
@@ -29,8 +33,14 @@ defmodule Hephaestus.Runtime.Runner.Local do
 
     GenServer.start_link(
       __MODULE__,
-      %{instance: instance, registry: registry, storage: storage, task_supervisor: task_supervisor},
-      name: via_tuple(registry, instance.id)
+      %{
+        instance: instance,
+        instance_id: instance_id,
+        registry: registry,
+        storage: storage,
+        task_supervisor: task_supervisor
+      },
+      name: via_tuple(registry, instance_id)
     )
   end
 
@@ -48,8 +58,16 @@ defmodule Hephaestus.Runtime.Runner.Local do
 
     child_spec = %{
       id: {__MODULE__, instance.id},
-      start: {__MODULE__, :start_link, [[instance: instance, registry: registry, storage: storage, task_supervisor: task_supervisor]]},
-      restart: :temporary
+      start:
+        {__MODULE__, :start_link,
+         [[
+           instance: instance,
+           instance_id: instance.id,
+           registry: registry,
+           storage: storage,
+           task_supervisor: task_supervisor
+         ]]},
+      restart: :transient
     }
 
     case DynamicSupervisor.start_child(dynamic_supervisor, child_spec) do
@@ -78,10 +96,19 @@ defmodule Hephaestus.Runtime.Runner.Local do
   end
 
   @impl GenServer
-  @spec init(state()) :: {:ok, state(), {:continue, :advance}}
-  def init(%{registry: registry} = state) do
+  @spec init(state()) :: {:ok, state(), {:continue, :advance}} | {:stop, :normal}
+  def init(%{instance: instance, instance_id: instance_id, registry: registry, storage: storage} = state) do
     remember_registry(registry)
-    {:ok, state, {:continue, :advance}}
+
+    recovered_instance = recover_instance(storage, instance_id, instance)
+
+    case recovered_instance.status do
+      status when status in [:completed, :failed] ->
+        {:stop, :normal}
+
+      _ ->
+        {:ok, with_instance(state, recovered_instance), {:continue, :advance}}
+    end
   end
 
   @impl GenServer
@@ -235,6 +262,20 @@ defmodule Hephaestus.Runtime.Runner.Local do
 
   defp storage_put({storage_module, storage_name}, instance) do
     apply(storage_module, :put, [storage_name, instance])
+  end
+
+  defp recover_instance(storage, instance_id, instance) do
+    case storage_get(storage, instance_id) do
+      {:ok, %Instance{status: status} = stored_instance} when status != :pending ->
+        stored_instance
+
+      _ ->
+        instance
+    end
+  end
+
+  defp storage_get({storage_module, storage_name}, instance_id) do
+    apply(storage_module, :get, [storage_name, instance_id])
   end
 
   defp remember_registry(registry), do: :persistent_term.put(@registry_key, registry)

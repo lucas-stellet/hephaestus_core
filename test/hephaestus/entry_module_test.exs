@@ -53,6 +53,22 @@ defmodule Hephaestus.EntryModuleTest do
       assert {:ok, instance} = ETSStorage.get(TestHephaestus.Storage, id)
       assert instance.status == :completed
     end
+
+    test "resumes event workflow with payment_confirmed" do
+      assert {:ok, id} = TestHephaestus.start_instance(Hephaestus.Test.EventWorkflow, %{})
+      Process.sleep(100)
+
+      assert {:ok, waiting_instance} = ETSStorage.get(TestHephaestus.Storage, id)
+      assert waiting_instance.status == :waiting
+      assert waiting_instance.current_step == :wait_for_event
+
+      assert :ok = TestHephaestus.resume(id, "payment_confirmed")
+      Process.sleep(100)
+
+      assert {:ok, instance} = ETSStorage.get(TestHephaestus.Storage, id)
+      assert instance.status == :completed
+      assert %{processed: true} = instance.context.steps[:step_b]
+    end
   end
 
   describe "parallel workflow end-to-end" do

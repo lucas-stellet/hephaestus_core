@@ -32,6 +32,15 @@ defmodule Hephaestus.Test.AsyncStep do
   def execute(_instance, _config, _context), do: {:async}
 end
 
+defmodule Hephaestus.Test.WaitForEventStep do
+  @behaviour Hephaestus.Steps.Step
+
+  @impl true
+  def execute(instance, config, context) do
+    Hephaestus.Steps.WaitForEvent.execute(instance, config, context)
+  end
+end
+
 defmodule Hephaestus.Test.FailStep do
   @behaviour Hephaestus.Steps.Step
 
