@@ -1,4 +1,47 @@
 defmodule Hephaestus.Core.Workflow do
+  @moduledoc """
+  Workflow definition struct and compile-time validation.
+
+  Workflows are defined as modules using `use Hephaestus.Workflow` with a
+  `definition/0` callback that returns a `%Hephaestus.Core.Workflow{}` struct.
+
+  ## Example
+
+      defmodule MyApp.Workflows.OrderFlow do
+        use Hephaestus.Workflow
+        alias Hephaestus.Core.Step
+
+        @impl true
+        def definition do
+          %Hephaestus.Core.Workflow{
+            initial_step: :validate,
+            steps: [
+              %Step{ref: :validate, module: MyApp.Steps.Validate, transitions: %{"valid" => :process}},
+              %Step{ref: :process, module: MyApp.Steps.Process, transitions: %{"done" => :finish}},
+              %Step{ref: :finish, module: Hephaestus.Steps.End}
+            ]
+          }
+        end
+      end
+
+  ## Compile-time validation
+
+  The `@before_compile` hook validates the workflow graph at compile time:
+
+    * No duplicate step refs
+    * `initial_step` exists in the step list
+    * All transition targets reference existing steps
+    * No cycles in the graph
+    * All steps are reachable from `initial_step`
+    * Step configs must be structs (not plain maps)
+
+  ## Generated functions
+
+    * `__step__/1` - returns the step definition for a given ref
+    * `__steps_map__/0` - returns all steps as a map keyed by ref
+    * `__predecessors__/1` - returns the set of steps that transition into a given step
+  """
+
   @enforce_keys [:initial_step, :steps]
   defstruct [:initial_step, :steps]
 

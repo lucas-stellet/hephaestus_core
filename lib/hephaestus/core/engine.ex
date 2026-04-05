@@ -1,4 +1,33 @@
 defmodule Hephaestus.Core.Engine do
+  @moduledoc """
+  Pure functional workflow engine.
+
+  Provides primitives for advancing workflow instances through their step graph.
+  The engine has **no side-effects** — it transforms `Instance` structs and returns
+  new state. The runtime layer (`Runner.Local`) calls these primitives to orchestrate
+  actual execution.
+
+  ## Primitives
+
+    * `advance/1` - activates initial step or marks completion (never executes steps)
+    * `execute_step/2` - dispatches a step through the `StepDefinition` protocol
+    * `complete_step/4` - marks a step as completed and updates context
+    * `activate_transitions/3` - resolves transitions and activates next steps
+    * `check_completion/1` - marks instance as completed when no active steps remain
+    * `resume_step/3` - resumes a waiting step with an external event
+
+  ## Usage in IEx (without OTP)
+
+      instance = Instance.new(MyWorkflow, %{data: "value"})
+      {:ok, instance} = Engine.advance(instance)
+      # instance.active_steps has the initial step
+      step_def = MyWorkflow.__step__(:initial_step)
+      {:ok, event, ctx} = Engine.execute_step(instance, step_def)
+      instance = Engine.complete_step(instance, :initial_step, event, ctx)
+      instance = Engine.activate_transitions(instance, :initial_step, event)
+      instance = Engine.check_completion(instance)
+  """
+
   alias Hephaestus.Core.{Context, Instance}
   alias Hephaestus.StepDefinition
 

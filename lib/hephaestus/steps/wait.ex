@@ -1,4 +1,16 @@
 defmodule Hephaestus.Steps.Wait do
+  @moduledoc """
+  Built-in step that pauses a workflow for a specified duration.
+
+  Returns `{:async}` immediately. The runner is responsible for scheduling
+  a resume after the configured delay using `delay_ms/1`.
+
+  ## Config
+
+    * `:duration` - integer amount of time
+    * `:unit` - one of `:second`, `:minute`, `:hour`, `:day`
+  """
+
   @behaviour Hephaestus.Steps.Step
 
   alias Hephaestus.Core.{Context, Instance}

@@ -1,6 +1,43 @@
 defmodule Hephaestus do
   @moduledoc """
   Entry-point macro for consumer applications.
+
+  Use this module in your application to configure and start the Hephaestus
+  workflow engine with your chosen storage and runner adapters.
+
+  ## Usage
+
+      defmodule MyApp.Hephaestus do
+        use Hephaestus,
+          storage: Hephaestus.Runtime.Storage.ETS,
+          runner: Hephaestus.Runtime.Runner.Local
+      end
+
+  Then add `MyApp.Hephaestus` to your application's supervision tree:
+
+      children = [
+        MyApp.Hephaestus
+      ]
+
+  This starts a supervision tree with Registry, DynamicSupervisor,
+  TaskSupervisor, and the configured storage adapter.
+
+  ## API
+
+  The generated module exposes:
+
+    * `start_instance/2` - starts a workflow instance
+    * `resume/2` - resumes a waiting workflow instance
+
+  ## Example
+
+      {:ok, id} = MyApp.Hephaestus.start_instance(MyApp.Workflows.OrderFlow, %{order_id: 123})
+      :ok = MyApp.Hephaestus.resume(id, "payment_confirmed")
+
+  ## Options
+
+    * `:storage` - the storage adapter module (default: `Hephaestus.Runtime.Storage.ETS`)
+    * `:runner` - the runner adapter module (default: `Hephaestus.Runtime.Runner.Local`)
   """
 
   @default_storage Hephaestus.Runtime.Storage.ETS

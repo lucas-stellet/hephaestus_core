@@ -1,4 +1,24 @@
 defmodule Hephaestus.Core.Context do
+  @moduledoc """
+  Workflow execution context carrying initial data and step results.
+
+  The context has two namespaced sections:
+
+    * `initial` - immutable data provided when starting the workflow instance
+    * `steps` - results accumulated from completed steps, keyed by step ref
+
+  Step results are always namespaced to avoid conflicts in fan-in scenarios
+  where parallel steps complete simultaneously.
+
+  ## Example
+
+      context = Context.new(%{order_id: 123})
+      context = Context.put_step_result(context, :validate, %{valid: true})
+
+      context.initial.order_id     #=> 123
+      context.steps.validate.valid #=> true
+  """
+
   @enforce_keys [:initial]
   defstruct initial: %{}, steps: %{}
 

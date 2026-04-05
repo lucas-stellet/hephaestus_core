@@ -1,4 +1,14 @@
 defmodule Hephaestus.Steps.Debug do
+  @moduledoc """
+  Built-in step that logs the current context and execution history.
+
+  Outputs `context.initial`, `context.steps`, and `instance.execution_history`
+  via `Logger.debug/1`. Returns `{:ok, "completed"}`.
+
+  Insert at any point in a workflow to inspect accumulated state during
+  development.
+  """
+
   @behaviour Hephaestus.Steps.Step
 
   require Logger

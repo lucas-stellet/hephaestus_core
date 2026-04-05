@@ -1,4 +1,23 @@
 defmodule Hephaestus.Core.Instance do
+  @moduledoc """
+  A runtime instance of a workflow execution.
+
+  Tracks the current state of a workflow as it progresses through steps,
+  including which steps are active (being executed), completed, and the
+  accumulated context.
+
+  ## Fields
+
+    * `id` - unique identifier (UUID v4)
+    * `workflow` - the workflow module being executed
+    * `current_step` - the step ref currently being processed (or `nil`)
+    * `status` - one of `:pending`, `:running`, `:waiting`, `:completed`, `:failed`
+    * `context` - `Hephaestus.Core.Context` with initial data and step results
+    * `active_steps` - `MapSet` of step refs currently being executed
+    * `completed_steps` - `MapSet` of step refs that have finished
+    * `execution_history` - list of `Hephaestus.Core.ExecutionEntry` records
+  """
+
   alias Hephaestus.Core.Context
 
   @enforce_keys [:id, :workflow]

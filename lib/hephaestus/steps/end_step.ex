@@ -1,4 +1,11 @@
 defmodule Hephaestus.Steps.End do
+  @moduledoc """
+  Built-in terminal step that marks a workflow as complete.
+
+  Always returns `{:ok, "completed"}`. Every workflow must have at least one
+  path leading to an End step.
+  """
+
   @behaviour Hephaestus.Steps.Step
 
   alias Hephaestus.Core.{Context, Instance}
