@@ -1,12 +1,21 @@
 defmodule Hephaestus.Core.Engine do
-  alias Hephaestus.Core.{Context, ExecutionEntry, Instance}
+  alias Hephaestus.Core.{Context, Instance}
   alias Hephaestus.StepDefinition
 
   @spec advance(Instance.t()) :: {:ok, Instance.t()} | {:error, term()}
   def advance(%Instance{} = instance) do
-    instance
-    |> ensure_started()
-    |> do_advance()
+    instance = ensure_started(instance)
+
+    cond do
+      instance.status == :waiting ->
+        {:ok, instance}
+
+      MapSet.size(instance.active_steps) > 0 ->
+        {:ok, instance}
+
+      true ->
+        {:ok, check_completion(instance)}
+    end
   end
 
   @spec execute_step(Instance.t(), term()) ::
@@ -19,25 +28,17 @@ defmodule Hephaestus.Core.Engine do
   end
 
   @spec complete_step(Instance.t(), atom(), String.t(), map()) :: Instance.t()
-  def complete_step(%Instance{} = instance, step_ref, event, context_updates) do
-    entry = %ExecutionEntry{
-      step_ref: step_ref,
-      event: event,
-      timestamp: DateTime.utc_now(),
-      context_updates: context_updates
-    }
-
+  def complete_step(%Instance{} = instance, step_ref, _event, context_updates) do
     %{
       instance
       | active_steps: MapSet.delete(instance.active_steps, step_ref),
         completed_steps: MapSet.put(instance.completed_steps, step_ref),
-        context: Context.put_step_result(instance.context, step_ref, context_updates),
-        execution_history: instance.execution_history ++ [entry]
+        context: Context.put_step_result(instance.context, step_ref, context_updates)
     }
   end
 
-  @spec resume(Instance.t(), String.t()) :: Instance.t()
-  def resume(%Instance{status: :waiting, current_step: step_ref} = instance, event)
+  @spec resume_step(Instance.t(), atom(), String.t()) :: Instance.t()
+  def resume_step(%Instance{status: :waiting} = instance, step_ref, event)
       when is_atom(step_ref) and is_binary(event) do
     instance
     |> complete_step(step_ref, event, %{})
@@ -46,40 +47,7 @@ defmodule Hephaestus.Core.Engine do
     |> Map.put(:current_step, nil)
   end
 
-  def resume(%Instance{} = instance, _event), do: instance
-
-  defp do_advance(%Instance{status: :waiting} = instance), do: {:ok, instance}
-
-  defp do_advance(%Instance{} = instance) do
-    case next_active_step(instance) do
-      nil ->
-        {:ok, maybe_complete(instance)}
-
-      step_ref ->
-        step_def = instance.workflow.__step__(step_ref)
-        running_instance = %{instance | current_step: step_ref, status: :running}
-
-        case execute_step(running_instance, step_def) do
-          {:ok, event} ->
-            running_instance
-            |> complete_step(step_ref, event, %{})
-            |> activate_transitions(step_ref, event)
-            |> do_advance()
-
-          {:ok, event, context_updates} ->
-            running_instance
-            |> complete_step(step_ref, event, context_updates)
-            |> activate_transitions(step_ref, event)
-            |> do_advance()
-
-          {:async} ->
-            {:ok, %{running_instance | status: :waiting}}
-
-          {:error, reason} ->
-            {:error, reason}
-        end
-    end
-  end
+  def resume_step(%Instance{} = instance, _step_ref, _event), do: instance
 
   defp ensure_started(%Instance{status: :pending} = instance) do
     workflow = instance.workflow.definition()
@@ -94,7 +62,8 @@ defmodule Hephaestus.Core.Engine do
 
   defp ensure_started(%Instance{} = instance), do: instance
 
-  defp maybe_complete(%Instance{active_steps: active_steps} = instance) do
+  @spec check_completion(Instance.t()) :: Instance.t()
+  def check_completion(%Instance{active_steps: active_steps} = instance) do
     if MapSet.size(active_steps) == 0 and instance.status != :waiting do
       %{instance | status: :completed, current_step: nil}
     else
@@ -102,14 +71,8 @@ defmodule Hephaestus.Core.Engine do
     end
   end
 
-  defp next_active_step(%Instance{active_steps: active_steps}) do
-    active_steps
-    |> MapSet.to_list()
-    |> Enum.sort()
-    |> List.first()
-  end
-
-  defp activate_transitions(%Instance{} = instance, step_ref, event) do
+  @spec activate_transitions(Instance.t(), atom(), String.t()) :: Instance.t()
+  def activate_transitions(%Instance{} = instance, step_ref, event) do
     transitions =
       step_ref
       |> instance.workflow.__step__()
