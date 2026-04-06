@@ -2,7 +2,7 @@ defmodule Hephaestus.Steps.End do
   @moduledoc """
   Built-in terminal step that marks a workflow as complete.
 
-  Always returns `{:ok, "completed"}`. Every workflow must have at least one
+  Always returns `{:ok, :end}`. Every workflow must have at least one
   path leading to an End step.
   """
 
@@ -11,8 +11,12 @@ defmodule Hephaestus.Steps.End do
   alias Hephaestus.Core.{Context, Instance}
 
   @impl true
-  @spec execute(Instance.t(), map() | nil, Context.t()) :: {:ok, String.t()}
+  @spec events() :: [:end]
+  def events, do: [:end]
+
+  @impl true
+  @spec execute(Instance.t(), map() | nil, Context.t()) :: {:ok, :end}
   def execute(%Instance{}, _config, %Context{}) do
-    {:ok, "completed"}
+    {:ok, :end}
   end
 end

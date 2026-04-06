@@ -16,6 +16,10 @@ defmodule Hephaestus.Steps.WaitForEvent do
   alias Hephaestus.Core.{Context, Instance}
 
   @impl true
+  @spec events() :: [:received]
+  def events, do: [:received]
+
+  @impl true
   @spec execute(Instance.t(), map() | nil, Context.t()) :: {:async}
   def execute(%Instance{}, _config, %Context{}) do
     {:async}

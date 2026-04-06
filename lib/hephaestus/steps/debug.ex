@@ -3,7 +3,7 @@ defmodule Hephaestus.Steps.Debug do
   Built-in step that logs the current context and execution history.
 
   Outputs `context.initial`, `context.steps`, and `instance.execution_history`
-  via `Logger.debug/1`. Returns `{:ok, "completed"}`.
+  via `Logger.debug/1`. Returns `{:ok, :completed}`.
 
   Insert at any point in a workflow to inspect accumulated state during
   development.
@@ -16,7 +16,11 @@ defmodule Hephaestus.Steps.Debug do
   alias Hephaestus.Core.{Context, Instance}
 
   @impl true
-  @spec execute(Instance.t(), map() | nil, Context.t()) :: {:ok, String.t()}
+  @spec events() :: [:completed]
+  def events, do: [:completed]
+
+  @impl true
+  @spec execute(Instance.t(), map() | nil, Context.t()) :: {:ok, :completed}
   def execute(%Instance{} = instance, _config, %Context{} = context) do
     Logger.debug(fn ->
       [
@@ -29,6 +33,6 @@ defmodule Hephaestus.Steps.Debug do
       ]
     end)
 
-    {:ok, "completed"}
+    {:ok, :completed}
   end
 end

@@ -16,6 +16,10 @@ defmodule Hephaestus.Steps.Wait do
   alias Hephaestus.Core.{Context, Instance}
 
   @impl true
+  @spec events() :: [:timeout]
+  def events, do: [:timeout]
+
+  @impl true
   @spec execute(Instance.t(), map() | nil, Context.t()) :: {:async}
   def execute(%Instance{}, _config, %Context{}) do
     {:async}

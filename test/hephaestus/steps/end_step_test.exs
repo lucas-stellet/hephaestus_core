@@ -8,13 +8,13 @@ defmodule Hephaestus.Steps.EndStepTest do
   end
 
   describe "execute/3" do
-    test "returns completed event" do
+    test "returns end event" do
       instance = Instance.new(TestWorkflow, %{})
       context = Context.new(%{order_id: 123})
 
       result = EndStep.execute(instance, nil, context)
 
-      assert {:ok, "completed"} = result
+      assert {:ok, :end} = result
     end
 
     test "ignores config" do
@@ -23,7 +23,7 @@ defmodule Hephaestus.Steps.EndStepTest do
 
       result = EndStep.execute(instance, %{some: "config"}, context)
 
-      assert {:ok, "completed"} = result
+      assert {:ok, :end} = result
     end
   end
 end

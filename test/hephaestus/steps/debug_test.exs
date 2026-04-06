@@ -10,13 +10,13 @@ defmodule Hephaestus.Steps.DebugTest do
   end
 
   describe "execute/3" do
-    test "returns completed event" do
+    test "returns completed atom event" do
       instance = Instance.new(TestWorkflow, %{order_id: 123})
       context = Context.new(%{order_id: 123})
 
       result =
         capture_log(fn ->
-          assert {:ok, "completed"} = Debug.execute(instance, nil, context)
+          assert {:ok, :completed} = Debug.execute(instance, nil, context)
         end)
 
       assert is_binary(result)
@@ -54,7 +54,7 @@ defmodule Hephaestus.Steps.DebugTest do
     test "logs execution history" do
       entry = %ExecutionEntry{
         step_ref: :validate,
-        event: "valid",
+        event: :valid,
         timestamp: ~U[2026-01-01 00:00:00Z]
       }
 
