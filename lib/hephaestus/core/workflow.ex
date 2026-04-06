@@ -309,10 +309,12 @@ defmodule Hephaestus.Workflow do
 
     graph_ast = Macro.escape(graph)
     predecessors_ast = Macro.escape(predecessors)
+    edges_ast = Macro.escape(edges)
 
     quote do
       def __predecessors__(module), do: Map.get(unquote(predecessors_ast), module, MapSet.new())
       def __graph__, do: unquote(graph_ast)
+      def __edges__, do: unquote(edges_ast)
     end
   end
 
