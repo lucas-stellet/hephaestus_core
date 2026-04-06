@@ -12,7 +12,7 @@
 | 01 | [Adicionar libgraph](task-01-libgraph-dependency.md) | — | completed |
 | 02 | [Step behaviour: events/0 + step_key/0](task-02-step-behaviour.md) | — | completed |
 | 03 | [Built-in steps: events/0](task-03-builtin-steps.md) | 02 | pending |
-| 04 | [Instance step_configs + ExecutionEntry types](task-04-data-structs.md) | — | pending |
+| 04 | [Instance step_configs + ExecutionEntry types](task-04-data-structs.md) | — | completed |
 | 05 | [Remover Step struct + StepDefinition protocol](task-05-remove-structs.md) | 04 | pending |
 | 06 | [Workflow macro: edge extraction + libgraph](task-06-workflow-macro.md) | 01, 02, 05 | pending |
 | 07 | [Engine: nova API](task-07-engine.md) | 04, 05, 06 | pending |

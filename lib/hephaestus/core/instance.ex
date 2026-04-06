@@ -10,11 +10,12 @@ defmodule Hephaestus.Core.Instance do
 
     * `id` - unique identifier (UUID v4)
     * `workflow` - the workflow module being executed
-    * `current_step` - the step ref currently being processed (or `nil`)
+    * `current_step` - the step module currently being processed (or `nil`)
     * `status` - one of `:pending`, `:running`, `:waiting`, `:completed`, `:failed`
     * `context` - `Hephaestus.Core.Context` with initial data and step results
-    * `active_steps` - `MapSet` of step refs currently being executed
-    * `completed_steps` - `MapSet` of step refs that have finished
+    * `step_configs` - per-step config overrides keyed by step module
+    * `active_steps` - `MapSet` of step modules currently being executed
+    * `completed_steps` - `MapSet` of step modules that have finished
     * `execution_history` - list of `Hephaestus.Core.ExecutionEntry` records
   """
 
@@ -27,6 +28,7 @@ defmodule Hephaestus.Core.Instance do
     :current_step,
     status: :pending,
     context: %Context{initial: %{}, steps: %{}},
+    step_configs: %{},
     active_steps: MapSet.new(),
     completed_steps: MapSet.new(),
     execution_history: []
@@ -37,11 +39,12 @@ defmodule Hephaestus.Core.Instance do
   @type t :: %__MODULE__{
           id: String.t(),
           workflow: module(),
-          current_step: atom() | nil,
+          current_step: module() | nil,
           status: status(),
           context: Context.t(),
-          active_steps: MapSet.t(atom()),
-          completed_steps: MapSet.t(atom()),
+          step_configs: %{optional(module()) => map()},
+          active_steps: MapSet.t(module()),
+          completed_steps: MapSet.t(module()),
           execution_history: list()
         }
 
