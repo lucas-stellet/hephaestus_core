@@ -1,137 +1,78 @@
 defmodule Hephaestus.Test.LinearWorkflow do
   use Hephaestus.Workflow
-  alias Hephaestus.Core.Step
 
   @impl true
-  def definition do
-    %Hephaestus.Core.Workflow{
-      initial_step: :step_a,
-      steps: [
-        %Step{ref: :step_a, module: Hephaestus.Test.PassStep, transitions: %{"done" => :step_b}},
-        %Step{ref: :step_b, module: Hephaestus.Test.PassWithContextStep, transitions: %{"done" => :finish}},
-        %Step{ref: :finish, module: Hephaestus.Steps.End}
-      ]
-    }
-  end
+  def start, do: Hephaestus.Test.Linear.StepA
+
+  @impl true
+  def transit(Hephaestus.Test.Linear.StepA, :done), do: Hephaestus.Test.Linear.StepB
+  def transit(Hephaestus.Test.Linear.StepB, :done), do: Hephaestus.Steps.End
 end
 
 defmodule Hephaestus.Test.BranchWorkflow do
   use Hephaestus.Workflow
-  alias Hephaestus.Core.Step
 
   @impl true
-  def definition do
-    %Hephaestus.Core.Workflow{
-      initial_step: :check,
-      steps: [
-        %Step{
-          ref: :check,
-          module: Hephaestus.Test.BranchStep,
-          transitions: %{"approved" => :approve, "rejected" => :reject}
-        },
-        %Step{ref: :approve, module: Hephaestus.Test.PassStep, transitions: %{"done" => :finish}},
-        %Step{ref: :reject, module: Hephaestus.Test.PassStep, transitions: %{"done" => :finish}},
-        %Step{ref: :finish, module: Hephaestus.Steps.End}
-      ]
-    }
-  end
+  def start, do: Hephaestus.Test.BranchStep
+
+  @impl true
+  def transit(Hephaestus.Test.BranchStep, :approved), do: Hephaestus.Test.Branch.Approve
+  def transit(Hephaestus.Test.BranchStep, :rejected), do: Hephaestus.Test.Branch.Reject
+  def transit(Hephaestus.Test.Branch.Approve, :done), do: Hephaestus.Steps.End
+  def transit(Hephaestus.Test.Branch.Reject, :done), do: Hephaestus.Steps.End
 end
 
 defmodule Hephaestus.Test.ParallelWorkflow do
   use Hephaestus.Workflow
-  alias Hephaestus.Core.Step
 
   @impl true
-  def definition do
-    %Hephaestus.Core.Workflow{
-      initial_step: :start,
-      steps: [
-        %Step{
-          ref: :start,
-          module: Hephaestus.Test.PassStep,
-          transitions: %{"done" => [:branch_a, :branch_b, :branch_c]}
-        },
-        %Step{ref: :branch_a, module: Hephaestus.Test.PassWithContextStep, transitions: %{"done" => :join}},
-        %Step{ref: :branch_b, module: Hephaestus.Test.PassWithContextStep, transitions: %{"done" => :join}},
-        %Step{ref: :branch_c, module: Hephaestus.Test.PassWithContextStep, transitions: %{"done" => :join}},
-        %Step{ref: :join, module: Hephaestus.Test.PassStep, transitions: %{"done" => :finish}},
-        %Step{ref: :finish, module: Hephaestus.Steps.End}
-      ]
-    }
-  end
+  def start, do: Hephaestus.Test.Parallel.Start
+
+  @impl true
+  def transit(Hephaestus.Test.Parallel.Start, :done),
+    do: [Hephaestus.Test.Parallel.BranchA, Hephaestus.Test.Parallel.BranchB, Hephaestus.Test.Parallel.BranchC]
+
+  def transit(Hephaestus.Test.Parallel.BranchA, :done), do: Hephaestus.Test.Parallel.Join
+  def transit(Hephaestus.Test.Parallel.BranchB, :done), do: Hephaestus.Test.Parallel.Join
+  def transit(Hephaestus.Test.Parallel.BranchC, :done), do: Hephaestus.Test.Parallel.Join
+  def transit(Hephaestus.Test.Parallel.Join, :done), do: Hephaestus.Steps.End
 end
 
 defmodule Hephaestus.Test.MixedParallelWorkflow do
   use Hephaestus.Workflow
-  alias Hephaestus.Core.Step
 
   @impl true
-  def definition do
-    %Hephaestus.Core.Workflow{
-      initial_step: :start,
-      steps: [
-        %Step{
-          ref: :start,
-          module: Hephaestus.Test.PassStep,
-          transitions: %{"done" => [:branch_sync, :branch_async]}
-        },
-        %Step{
-          ref: :branch_sync,
-          module: Hephaestus.Test.PassWithContextStep,
-          transitions: %{"done" => :join}
-        },
-        %Step{
-          ref: :branch_async,
-          module: Hephaestus.Test.AsyncStep,
-          transitions: %{"timeout" => :join}
-        },
-        %Step{ref: :join, module: Hephaestus.Test.PassStep, transitions: %{"done" => :finish}},
-        %Step{ref: :finish, module: Hephaestus.Steps.End}
-      ]
-    }
-  end
+  def start, do: Hephaestus.Test.MixedParallel.Start
+
+  @impl true
+  def transit(Hephaestus.Test.MixedParallel.Start, :done),
+    do: [Hephaestus.Test.MixedParallel.Sync, Hephaestus.Test.MixedParallel.Async]
+
+  def transit(Hephaestus.Test.MixedParallel.Sync, :done), do: Hephaestus.Test.MixedParallel.Join
+  def transit(Hephaestus.Test.MixedParallel.Async, :timeout), do: Hephaestus.Test.MixedParallel.Join
+  def transit(Hephaestus.Test.MixedParallel.Join, :done), do: Hephaestus.Steps.End
 end
 
 defmodule Hephaestus.Test.AsyncWorkflow do
   use Hephaestus.Workflow
-  alias Hephaestus.Core.Step
 
   @impl true
-  def definition do
-    %Hephaestus.Core.Workflow{
-      initial_step: :step_a,
-      steps: [
-        %Step{ref: :step_a, module: Hephaestus.Test.PassStep, transitions: %{"done" => :wait}},
-        %Step{ref: :wait, module: Hephaestus.Test.AsyncStep, transitions: %{"timeout" => :step_b}},
-        %Step{ref: :step_b, module: Hephaestus.Test.PassStep, transitions: %{"done" => :finish}},
-        %Step{ref: :finish, module: Hephaestus.Steps.End}
-      ]
-    }
-  end
+  def start, do: Hephaestus.Test.Async.StepA
+
+  @impl true
+  def transit(Hephaestus.Test.Async.StepA, :done), do: Hephaestus.Test.Async.Wait
+  def transit(Hephaestus.Test.Async.Wait, :timeout), do: Hephaestus.Test.Async.StepB
+  def transit(Hephaestus.Test.Async.StepB, :done), do: Hephaestus.Steps.End
 end
 
 defmodule Hephaestus.Test.EventWorkflow do
   use Hephaestus.Workflow
-  alias Hephaestus.Core.Step
 
   @impl true
-  def definition do
-    %Hephaestus.Core.Workflow{
-      initial_step: :step_a,
-      steps: [
-        %Step{ref: :step_a, module: Hephaestus.Test.PassStep, transitions: %{"done" => :wait_for_event}},
-        %Step{
-          ref: :wait_for_event,
-          module: Hephaestus.Test.WaitForEventStep,
-          transitions: %{"payment_confirmed" => :step_b}
-        },
-        %Step{
-          ref: :step_b,
-          module: Hephaestus.Test.PassWithContextStep,
-          transitions: %{"done" => :finish}
-        },
-        %Step{ref: :finish, module: Hephaestus.Steps.End}
-      ]
-    }
-  end
+  def start, do: Hephaestus.Test.Event.StepA
+
+  @impl true
+  def transit(Hephaestus.Test.Event.StepA, :done), do: Hephaestus.Test.Event.WaitForEvent
+  def transit(Hephaestus.Test.Event.WaitForEvent, :payment_confirmed), do: Hephaestus.Test.Event.StepB
+  def transit(Hephaestus.Test.Event.StepB, :done), do: Hephaestus.Steps.End
 end

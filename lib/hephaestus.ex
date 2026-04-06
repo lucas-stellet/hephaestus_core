@@ -32,7 +32,7 @@ defmodule Hephaestus do
   ## Example
 
       {:ok, id} = MyApp.Hephaestus.start_instance(MyApp.Workflows.OrderFlow, %{order_id: 123})
-      :ok = MyApp.Hephaestus.resume(id, "payment_confirmed")
+      :ok = MyApp.Hephaestus.resume(id, :payment_confirmed)
 
   ## Options
 
@@ -84,7 +84,7 @@ defmodule Hephaestus do
       @doc """
       Resumes a waiting workflow instance through the configured runner.
       """
-      def resume(instance_id, event) when is_binary(instance_id) and is_binary(event) do
+      def resume(instance_id, event) when is_binary(instance_id) and is_atom(event) do
         @hephaestus_runner.resume(instance_id, event)
       end
 

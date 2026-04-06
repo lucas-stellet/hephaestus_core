@@ -11,7 +11,7 @@ defmodule Hephaestus.Runtime.Runner do
 
   @callback resume(
               instance_id :: String.t(),
-              event :: String.t()
+              event :: atom()
             ) :: :ok | {:error, reason :: term()}
 
   @callback schedule_resume(

@@ -1,241 +1,254 @@
 defmodule Hephaestus.Core.Workflow do
   @moduledoc """
-  Workflow definition struct and compile-time validation.
+  Behaviour and compile-time validation helpers for workflow modules.
 
-  Workflows are defined as modules using `use Hephaestus.Workflow` with a
-  `definition/0` callback that returns a `%Hephaestus.Core.Workflow{}` struct.
+  Workflows are declared with `use Hephaestus.Workflow` and must expose:
 
-  ## Example
+    * `start/0`
+    * `transit/2`
+    * optional `transit/3` paired with `@targets`
 
-      defmodule MyApp.Workflows.OrderFlow do
-        use Hephaestus.Workflow
-        alias Hephaestus.Core.Step
-
-        @impl true
-        def definition do
-          %Hephaestus.Core.Workflow{
-            initial_step: :validate,
-            steps: [
-              %Step{ref: :validate, module: MyApp.Steps.Validate, transitions: %{"valid" => :process}},
-              %Step{ref: :process, module: MyApp.Steps.Process, transitions: %{"done" => :finish}},
-              %Step{ref: :finish, module: Hephaestus.Steps.End}
-            ]
-          }
-        end
-      end
-
-  ## Compile-time validation
-
-  The `@before_compile` hook validates the workflow graph at compile time:
-
-    * No duplicate step refs
-    * `initial_step` exists in the step list
-    * All transition targets reference existing steps
-    * No cycles in the graph
-    * All steps are reachable from `initial_step`
-    * Step configs must be structs (not plain maps)
-
-  ## Generated functions
-
-    * `__step__/1` - returns the step definition for a given ref
-    * `__steps_map__/0` - returns all steps as a map keyed by ref
-    * `__predecessors__/1` - returns the set of steps that transition into a given step
+  The `Hephaestus.Workflow` macro extracts the workflow DAG at compile time,
+  validates it, and generates helper functions for runtime coordination.
   """
 
-  @enforce_keys [:initial_step, :steps]
-  defstruct [:initial_step, :steps]
+  @typedoc "Static or configured step target."
+  @type target :: module() | {module(), map() | struct()}
 
-  @type t :: %__MODULE__{
-          initial_step: atom(),
-          steps: list()
+  @callback start() :: target()
+
+  @callback transit(from :: module(), event :: atom()) ::
+              target() | [target()] | nil
+
+  @callback transit(from :: module(), event :: atom(), context :: Hephaestus.Core.Context.t()) ::
+              target() | [target()] | nil
+
+  @optional_callbacks [transit: 3]
+
+  @end_step Hephaestus.Steps.End
+
+  @type edge :: %{
+          from: module(),
+          event: atom(),
+          targets: [module()],
+          dynamic?: boolean
         }
 
-  @callback definition() :: t()
+  @spec validate!(module(), module() | {module(), map() | struct()}, [edge()], Macro.Env.t()) ::
+          %{graph: Graph.t(), predecessors: %{optional(module()) => MapSet.t(module())}}
+  def validate!(workflow_module, start, edges, env) do
+    start_module = normalize_start_module!(start, env)
+    graph = build_graph(start_module, edges)
 
-  alias Hephaestus.StepDefinition
-
-  @spec validate!(t(), Macro.Env.t() | nil) :: %{
-          predecessors: %{optional(atom()) => MapSet.t(atom())},
-          steps_map: %{optional(atom()) => term()}
-        }
-  def validate!(%__MODULE__{} = workflow, env \\ nil) do
-    steps = workflow.steps || []
-    refs = Enum.map(steps, &StepDefinition.ref/1)
-
-    validate_duplicate_refs!(refs, env)
-
-    steps_map = Map.new(steps, fn step -> {StepDefinition.ref(step), step} end)
-
-    validate_initial_step!(workflow.initial_step, steps_map, env)
-    validate_configs!(steps, env)
-
-    adjacency = build_adjacency(steps)
-
-    validate_targets!(adjacency, steps_map, env)
-    validate_acyclic!(adjacency, env)
-    validate_reachable!(workflow.initial_step, refs, adjacency, env)
+    validate_acyclic!(graph, env)
+    validate_reachable!(graph, start_module, env)
+    validate_leaf_nodes!(graph, env)
+    validate_fan_out_convergence!(edges, graph, env)
+    validate_context_key_collisions!(graph, env)
+    validate_events!(workflow_module, graph, edges, env)
 
     %{
-      steps_map: steps_map,
-      predecessors: build_predecessors(refs, adjacency)
+      graph: graph,
+      predecessors: build_predecessors(graph)
     }
   end
 
-  defp validate_duplicate_refs!(refs, env) do
-    case refs |> Enum.frequencies() |> Enum.find(fn {_ref, count} -> count > 1 end) do
-      {ref, _count} -> compile_error!(env, "duplicate step ref #{inspect(ref)} found in steps/0")
-      nil -> :ok
-    end
+  defp normalize_start_module!(module, _env) when is_atom(module), do: module
+  defp normalize_start_module!({module, _config}, _env) when is_atom(module), do: module
+
+  defp normalize_start_module!(other, env) do
+    compile_error!(env, "start/0 must return a step module or {step_module, config}, got: #{inspect(other)}")
   end
 
-  defp validate_initial_step!(initial_step, steps_map, env) do
-    if Map.has_key?(steps_map, initial_step) do
-      :ok
-    else
-      compile_error!(env, "initial_step #{inspect(initial_step)} not found in steps/0")
-    end
-  end
+  defp build_graph(start_module, edges) do
+    vertices =
+      edges
+      |> Enum.flat_map(fn %{from: from, targets: targets} -> [from | targets] end)
+      |> Kernel.++([start_module])
+      |> Enum.uniq()
 
-  defp validate_configs!(steps, env) do
-    Enum.each(steps, fn step ->
-      case StepDefinition.config(step) do
-        nil ->
-          :ok
+    graph =
+      Graph.new(type: :directed)
+      |> Graph.add_vertices(vertices)
 
-        config when is_struct(config) ->
-          :ok
-
-        config when is_map(config) ->
-          compile_error!(
-            env,
-            "step #{inspect(StepDefinition.ref(step))} config must be a struct, got: #{inspect(config)}"
-          )
-
-        _other ->
-          :ok
-      end
-    end)
-  end
-
-  defp validate_targets!(adjacency, steps_map, env) do
-    Enum.each(adjacency, fn {source_ref, targets} ->
-      Enum.each(targets, fn target_ref ->
-        if Map.has_key?(steps_map, target_ref) do
-          :ok
-        else
-          compile_error!(
-            env,
-            "step #{inspect(target_ref)} referenced in transitions but not defined in steps/0 " <>
-              "(from #{inspect(source_ref)})"
-          )
-        end
+    Enum.reduce(edges, graph, fn %{from: from, targets: targets}, acc ->
+      Enum.reduce(targets, acc, fn target, graph_acc ->
+        Graph.add_edge(graph_acc, from, target)
       end)
     end)
   end
 
-  defp validate_acyclic!(adjacency, env) do
-    {_visited, _stack} =
-      Enum.reduce(Map.keys(adjacency), {MapSet.new(), []}, fn ref, {visited, stack} ->
-        dfs_cycle!(ref, adjacency, visited, stack, env)
-      end)
-
-    :ok
-  end
-
-  defp dfs_cycle!(ref, adjacency, visited, stack, env) do
-    cond do
-      ref in stack ->
-        cycle =
-          [ref | stack]
-          |> Enum.take_while(&(&1 != ref))
-          |> Enum.reverse()
-          |> Kernel.++([ref])
-
-        compile_error!(env, "cycle detected in workflow graph: #{Enum.map_join(cycle, " -> ", &inspect/1)}")
-
-      MapSet.member?(visited, ref) ->
-        {visited, stack}
-
-      true ->
-        next_stack = [ref | stack]
-
-        {next_visited, _next_stack} =
-          Enum.reduce(Map.get(adjacency, ref, []), {MapSet.put(visited, ref), next_stack}, fn target,
-                                                                                               {acc_visited,
-                                                                                                acc_stack} ->
-            dfs_cycle!(target, adjacency, acc_visited, acc_stack, env)
-          end)
-
-        {next_visited, stack}
+  defp validate_acyclic!(graph, env) do
+    unless Graph.is_acyclic?(graph) do
+      compile_error!(env, "cycle detected in workflow graph")
     end
   end
 
-  defp validate_reachable!(initial_step, refs, adjacency, env) do
-    reachable = collect_reachable(MapSet.new([initial_step]), [initial_step], adjacency)
+  defp validate_reachable!(graph, start_module, env) do
+    reachable = MapSet.new([start_module | Graph.reachable_neighbors(graph, [start_module])])
 
-    unreachable_refs =
-      refs
+    unreachable =
+      graph
+      |> Graph.vertices()
       |> Enum.reject(&MapSet.member?(reachable, &1))
       |> Enum.sort()
 
-    case unreachable_refs do
+    if unreachable != [] do
+      compile_error!(
+        env,
+        "unreachable steps from start/0 #{inspect(start_module)}: #{Enum.map_join(unreachable, ", ", &inspect/1)}"
+      )
+    end
+  end
+
+  defp validate_leaf_nodes!(graph, env) do
+    invalid_leaves =
+      graph
+      |> Graph.vertices()
+      |> Enum.filter(&(Graph.out_neighbors(graph, &1) == []))
+      |> Enum.reject(&(&1 == @end_step))
+
+    case invalid_leaves do
       [] ->
         :ok
 
-      refs ->
+      leaves ->
         compile_error!(
           env,
-          "unreachable steps from initial_step #{inspect(initial_step)}: #{Enum.map_join(refs, ", ", &inspect/1)}"
+          "path terminates at #{Enum.map_join(leaves, ", ", &inspect/1)}, which is not #{inspect(@end_step)}"
         )
     end
   end
 
-  defp collect_reachable(visited, [], _adjacency), do: visited
+  defp validate_fan_out_convergence!(edges, graph, env) do
+    Enum.each(edges, fn
+      %{from: from, targets: targets, dynamic?: false} when length(targets) > 1 ->
+        reachable_sets = Enum.map(targets, &reachable_with_self(graph, &1))
+        common = Enum.reduce(reachable_sets, &MapSet.intersection/2) |> MapSet.delete(@end_step)
 
-  defp collect_reachable(visited, [ref | rest], adjacency) do
-    {next_visited, next_queue} =
-      Enum.reduce(Map.get(adjacency, ref, []), {visited, rest}, fn target, {acc_visited, acc_queue} ->
-        if MapSet.member?(acc_visited, target) do
-          {acc_visited, acc_queue}
-        else
-          {MapSet.put(acc_visited, target), acc_queue ++ [target]}
+        if MapSet.size(common) == 0 do
+          compile_error!(
+            env,
+            "fan-out branches from #{inspect(from)} must converge before #{inspect(@end_step)}"
+          )
         end
-      end)
 
-    collect_reachable(next_visited, next_queue, adjacency)
-  end
-
-  defp build_predecessors(refs, adjacency) do
-    initial = Map.new(refs, fn ref -> {ref, MapSet.new()} end)
-
-    Enum.reduce(adjacency, initial, fn {source_ref, targets}, predecessors ->
-      Enum.reduce(targets, predecessors, fn target_ref, acc ->
-        Map.update(acc, target_ref, MapSet.new([source_ref]), &MapSet.put(&1, source_ref))
-      end)
+      _edge ->
+        :ok
     end)
   end
 
-  defp build_adjacency(steps) do
-    Map.new(steps, fn step ->
-      {StepDefinition.ref(step), normalize_targets(StepDefinition.transitions(step))}
+  defp reachable_with_self(graph, vertex) do
+    MapSet.new([vertex | Graph.reachable_neighbors(graph, [vertex])])
+  end
+
+  defp validate_context_key_collisions!(graph, env) do
+    graph
+    |> Graph.vertices()
+    |> Enum.reject(&(&1 == @end_step))
+    |> Enum.group_by(&context_key_for/1)
+    |> Enum.each(fn
+      {_key, [_single]} ->
+        :ok
+
+      {key, modules} ->
+        compile_error!(
+          env,
+          "context key collision for #{inspect(key)}: #{Enum.map_join(modules, ", ", &inspect/1)}"
+        )
     end)
   end
 
-  defp normalize_targets(nil), do: []
+  defp validate_events!(workflow_module, graph, edges, env) do
+    transit_events =
+      Enum.reduce(edges, %{}, fn %{from: from, event: event}, acc ->
+        Map.update(acc, from, MapSet.new([event]), &MapSet.put(&1, event))
+      end)
 
-  defp normalize_targets(transitions) when is_map(transitions) do
-    Enum.flat_map(transitions, fn {_event, target} ->
-      case target do
-        target_ref when is_atom(target_ref) -> [target_ref]
-        target_refs when is_list(target_refs) -> target_refs
-        _other -> []
+    graph
+    |> Graph.vertices()
+    |> Enum.each(fn
+      @end_step ->
+        :ok
+
+      step_module ->
+        validate_step_events!(workflow_module, step_module, Map.get(transit_events, step_module, MapSet.new()), env)
+    end)
+  end
+
+  defp validate_step_events!(workflow_module, step_module, transit_events, env) do
+    ensure_events_callback!(step_module, env)
+    declared_events = step_module.events()
+
+    unless is_list(declared_events) and Enum.all?(declared_events, &is_atom/1) do
+      compile_error!(env, "#{inspect(step_module)} events/0 must return a list of atoms")
+    end
+
+    declared_set = MapSet.new(declared_events)
+
+    Enum.each(transit_events, fn event ->
+      unless MapSet.member?(declared_set, event) do
+        compile_error!(
+          env,
+          "#{inspect(step_module)} does not declare #{inspect(event)} in events/0"
+        )
+      end
+    end)
+
+    Enum.each(declared_events, fn event ->
+      unless MapSet.member?(transit_events, event) do
+        compile_error!(
+          env,
+          "#{inspect(step_module)} declares event #{inspect(event)} but no transit is defined in #{inspect(workflow_module)}"
+        )
       end
     end)
   end
 
-  defp normalize_targets(_other), do: []
+  defp ensure_events_callback!(step_module, env) do
+    ensure_step_module_loaded!(step_module, env)
 
-  defp compile_error!(nil, message), do: raise(CompileError, description: message)
+    unless function_exported?(step_module, :events, 0) do
+      compile_error!(env, "#{inspect(step_module)} must implement events/0")
+    end
+  end
+
+  defp build_predecessors(graph) do
+    Map.new(Graph.vertices(graph), fn vertex ->
+      {vertex, MapSet.new(Graph.in_neighbors(graph, vertex))}
+    end)
+  end
+
+  defp context_key_for(module) do
+    ensure_step_module_loaded!(module, nil)
+
+    if function_exported?(module, :step_key, 0) do
+      module.step_key()
+    else
+      module
+      |> Module.split()
+      |> List.last()
+      |> Macro.underscore()
+      |> String.to_atom()
+    end
+  end
+
+  defp ensure_step_module_loaded!(step_module, nil) do
+    case Code.ensure_compiled(step_module) do
+      {:module, _module} -> :ok
+      {:error, _reason} -> :ok
+    end
+  end
+
+  defp ensure_step_module_loaded!(step_module, env) do
+    case Code.ensure_compiled(step_module) do
+      {:module, _module} ->
+        :ok
+
+      {:error, reason} ->
+        compile_error!(env, "unable to load step module #{inspect(step_module)}: #{inspect(reason)}")
+    end
+  end
 
   defp compile_error!(env, message) do
     raise CompileError,
@@ -246,30 +259,174 @@ defmodule Hephaestus.Core.Workflow do
 end
 
 defmodule Hephaestus.Workflow do
+  @moduledoc false
+
+  @dynamic_edges_attr :hephaestus_dynamic_edges
+
   defmacro __using__(_opts) do
     quote do
       @behaviour Hephaestus.Core.Workflow
+      Module.register_attribute(__MODULE__, unquote(@dynamic_edges_attr), accumulate: true)
+      Module.register_attribute(__MODULE__, :targets, persist: false)
+      @on_definition Hephaestus.Workflow
       @before_compile Hephaestus.Workflow
     end
   end
 
+  def __on_definition__(env, _kind, :transit, args, _guards, _body) when length(args) == 3 do
+    [from_ast, event_ast, _context_ast] = args
+    targets = Module.get_attribute(env.module, :targets)
+    Module.delete_attribute(env.module, :targets)
+
+    if is_nil(targets) do
+      raise CompileError,
+        file: env.file,
+        line: env.line,
+        description: "transit/3 requires @targets with all possible destination modules"
+    end
+
+    from = expand_step_module!(from_ast, env, "transit/3 source")
+    event = expand_event!(event_ast, env, "transit/3 event")
+    expanded_targets = expand_targets!(targets, env, "transit/3 @targets")
+
+    Module.put_attribute(env.module, @dynamic_edges_attr, %{
+      from: from,
+      event: event,
+      targets: expanded_targets,
+      dynamic?: true
+    })
+  end
+
+  def __on_definition__(_env, _kind, _name, _args, _guards, _body), do: :ok
+
   defmacro __before_compile__(env) do
-    {:v1, :def, _meta, [{_clause_meta, _args, _guards, definition_body}]} =
-      Module.get_definition(env.module, {:definition, 0})
+    start = extract_start!(env)
+    edges = extract_static_edges!(env) ++ Enum.reverse(Module.get_attribute(env.module, @dynamic_edges_attr) || [])
+    %{graph: graph, predecessors: predecessors} = Hephaestus.Core.Workflow.validate!(env.module, start, edges, env)
 
-    %{steps_map: steps_map, predecessors: predecessors} =
-      definition_body
-      |> Code.eval_quoted([], env)
-      |> elem(0)
-      |> Hephaestus.Core.Workflow.validate!(env)
-
-    steps_map_ast = Macro.escape(steps_map)
+    graph_ast = Macro.escape(graph)
     predecessors_ast = Macro.escape(predecessors)
 
     quote do
-      def __steps_map__, do: unquote(steps_map_ast)
-      def __step__(ref), do: Map.get(__steps_map__(), ref)
-      def __predecessors__(ref), do: Map.get(unquote(predecessors_ast), ref, MapSet.new())
+      def __predecessors__(module), do: Map.get(unquote(predecessors_ast), module, MapSet.new())
+      def __graph__, do: unquote(graph_ast)
     end
   end
+
+  defp extract_start!(env) do
+    case Module.get_definition(env.module, {:start, 0}) do
+      {:v1, :def, _meta, [{_clause_meta, [], [], body}]} ->
+        extract_target!(body, env, "start/0")
+
+      nil ->
+        raise CompileError,
+          file: env.file,
+          line: env.line,
+          description: "workflow must define start/0"
+    end
+  end
+
+  defp extract_static_edges!(env) do
+    case Module.get_definition(env.module, {:transit, 2}) do
+      nil ->
+        []
+
+      {:v1, :def, _meta, clauses} ->
+        Enum.map(clauses, fn {_clause_meta, [from_ast, event_ast], _guards, body} ->
+          %{
+            from: expand_step_module!(from_ast, env, "transit/2 source"),
+            event: expand_event!(event_ast, env, "transit/2 event"),
+            targets: extract_targets!(body, env, "transit/2 body"),
+            dynamic?: false
+          }
+        end)
+    end
+  end
+
+  defp extract_targets!(body, env, context) do
+    case body do
+      list when is_list(list) ->
+        Enum.map(list, &extract_target!(&1, env, context))
+
+      other ->
+        [extract_target!(other, env, context)]
+    end
+  end
+
+  defp extract_target!({module, _config}, env, _context) when is_atom(module),
+    do: maybe_resolve_nested_module(module, module, env)
+
+  defp extract_target!(module, env, _context) when is_atom(module),
+    do: maybe_resolve_nested_module(module, module, env)
+
+  defp extract_target!(other, env, context) do
+    raise CompileError,
+      file: env.file,
+      line: env.line,
+      description: "#{context} must return step modules, {step_module, config}, or lists of them, got: #{inspect(other)}"
+  end
+
+  defp expand_targets!(targets, env, context) when is_list(targets) do
+    Enum.map(targets, &expand_step_module!(&1, env, context))
+  end
+
+  defp expand_targets!(other, env, context) do
+    raise CompileError,
+      file: env.file,
+      line: env.line,
+      description: "#{context} must be a list of step modules, got: #{inspect(other)}"
+  end
+
+  defp expand_step_module!(ast, env, context) do
+    expanded = Macro.expand(ast, env)
+    resolved = maybe_resolve_nested_module(expanded, ast, env)
+
+    if is_atom(resolved) do
+      resolved
+    else
+      raise CompileError,
+        file: env.file,
+        line: env.line,
+        description: "#{context} must be a step module, got: #{Macro.to_string(ast)}"
+    end
+  end
+
+  defp expand_event!(ast, env, context) do
+    expanded = Macro.expand(ast, env)
+
+    if is_atom(expanded) do
+      expanded
+    else
+      raise CompileError,
+        file: env.file,
+        line: env.line,
+        description: "#{context} must be an atom event, got: #{Macro.to_string(ast)}"
+    end
+  end
+
+  defp maybe_resolve_nested_module(expanded, {:__aliases__, _, segments}, env) when is_atom(expanded) do
+    nested = Module.concat(env.module, Module.concat(segments))
+
+    case Code.ensure_compiled(nested) do
+      {:module, _module} -> nested
+      {:error, _reason} -> expanded
+    end
+  end
+
+  defp maybe_resolve_nested_module(expanded, _ast, env) when is_atom(expanded) do
+    case Module.split(expanded) do
+      [single] ->
+        nested = Module.concat(env.module, single)
+
+        case Code.ensure_compiled(nested) do
+          {:module, _module} -> nested
+          {:error, _reason} -> expanded
+        end
+
+      _many ->
+        expanded
+    end
+  end
+
+  defp maybe_resolve_nested_module(expanded, _ast, _env), do: expanded
 end

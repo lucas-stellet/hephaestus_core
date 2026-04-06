@@ -77,10 +77,10 @@ defmodule Hephaestus.Runtime.Runner.Local do
   end
 
   @impl Runner
-  @spec resume(String.t(), String.t()) :: :ok | {:error, :instance_not_found}
-  def resume(instance_id, event) when is_binary(instance_id) and is_binary(event) do
+  @spec resume(String.t(), atom() | String.t()) :: :ok | {:error, :instance_not_found}
+  def resume(instance_id, event) when is_binary(instance_id) and (is_binary(event) or is_atom(event)) do
     with {:ok, pid} <- lookup_instance(instance_id) do
-      GenServer.cast(pid, {:resume, event})
+      GenServer.cast(pid, {:resume, normalize_event(event)})
       :ok
     end
   end
@@ -200,7 +200,7 @@ defmodule Hephaestus.Runtime.Runner.Local do
   def handle_info({:scheduled_resume, step_ref}, %{instance: instance} = state) do
     next_state =
       state
-      |> with_instance(Engine.resume_step(instance, step_ref, "timeout"))
+      |> with_instance(Engine.resume_step(instance, step_ref, :timeout))
       |> persist_instance()
 
     {:noreply, next_state, {:continue, :advance}}
@@ -216,10 +216,11 @@ defmodule Hephaestus.Runtime.Runner.Local do
   end
 
   defp execute_step(instance, step_ref) do
-    step_ref
-    |> instance.workflow.__step__()
-    |> then(&Engine.execute_step(instance, &1))
+    Engine.execute_step(instance, step_ref)
   end
+
+  defp normalize_event(event) when is_atom(event), do: event
+  defp normalize_event(event) when is_binary(event), do: String.to_existing_atom(event)
 
   defp persist_instance(%{instance: instance, storage: storage} = state) do
     :ok = storage_put(storage, instance)

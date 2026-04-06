@@ -47,7 +47,7 @@ defmodule Hephaestus.EntryModuleTest do
       assert {:ok, id} = TestHephaestus.start_instance(Hephaestus.Test.AsyncWorkflow, %{})
       Process.sleep(100)
 
-      assert :ok = TestHephaestus.resume(id, "timeout")
+      assert :ok = TestHephaestus.resume(id, :timeout)
       Process.sleep(100)
 
       assert {:ok, instance} = ETSStorage.get(TestHephaestus.Storage, id)
@@ -60,9 +60,9 @@ defmodule Hephaestus.EntryModuleTest do
 
       assert {:ok, waiting_instance} = ETSStorage.get(TestHephaestus.Storage, id)
       assert waiting_instance.status == :waiting
-      assert waiting_instance.current_step == :wait_for_event
+      assert waiting_instance.current_step == Hephaestus.Test.Event.WaitForEvent
 
-      assert :ok = TestHephaestus.resume(id, "payment_confirmed")
+      assert :ok = TestHephaestus.resume(id, :payment_confirmed)
       Process.sleep(100)
 
       assert {:ok, instance} = ETSStorage.get(TestHephaestus.Storage, id)
@@ -78,7 +78,7 @@ defmodule Hephaestus.EntryModuleTest do
 
       assert {:ok, instance} = ETSStorage.get(TestHephaestus.Storage, id)
       assert instance.status == :completed
-      assert MapSet.member?(instance.completed_steps, :join)
+      assert MapSet.member?(instance.completed_steps, Hephaestus.Test.Parallel.Join)
     end
   end
 end

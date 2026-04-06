@@ -13,10 +13,10 @@
 | 02 | [Step behaviour: events/0 + step_key/0](task-02-step-behaviour.md) | — | completed |
 | 03 | [Built-in steps: events/0](task-03-builtin-steps.md) | 02 | completed |
 | 04 | [Instance step_configs + ExecutionEntry types](task-04-data-structs.md) | — | completed |
-| 05 | [Remover Step struct + StepDefinition protocol](task-05-remove-structs.md) | 04 | pending |
-| 06 | [Workflow macro: edge extraction + libgraph](task-06-workflow-macro.md) | 01, 02, 05 | pending |
-| 07 | [Engine: nova API](task-07-engine.md) | 04, 05, 06 | pending |
-| 08 | [Runner + entry module: types](task-08-runner-entry.md) | 07 | pending |
+| 05 | [Remover Step struct + StepDefinition protocol](task-05-remove-structs.md) | 04 | completed |
+| 06 | [Workflow macro: edge extraction + libgraph](task-06-workflow-macro.md) | 01, 02, 05 | completed |
+| 07 | [Engine: nova API](task-07-engine.md) | 04, 05, 06 | completed |
+| 08 | [Runner + entry module: types](task-08-runner-entry.md) | 07 | completed |
 | 09 | [Migrar tests v1 para v2](task-09-update-v1-tests.md) | 02-08 | pending |
 | 10 | [Unit tests engine v2](task-10-unit-tests-engine.md) | 06, 07 | pending |
 | 11 | [Integration tests runtime](task-11-integration-tests.md) | 08, 09, 10 | pending |

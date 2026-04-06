@@ -54,7 +54,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
       Process.sleep(100)
       {:ok, instance} = ETSStorage.get(storage, id)
       assert instance.status == :completed
-      assert MapSet.member?(instance.completed_steps, :approve)
+      assert MapSet.member?(instance.completed_steps, Hephaestus.Test.Branch.Approve)
     end
   end
 
@@ -76,15 +76,15 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
       {:ok, instance} = ETSStorage.get(storage, id)
 
       assert instance.status == :waiting
-      assert instance.current_step == :wait_for_event
-      assert instance.active_steps == MapSet.new([:wait_for_event])
+      assert instance.current_step == Hephaestus.Test.Event.WaitForEvent
+      assert instance.active_steps == MapSet.new([Hephaestus.Test.Event.WaitForEvent])
     end
 
     test "resumes with payment_confirmed and completes", %{opts: opts, storage: storage} do
       {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.EventWorkflow, %{}, opts)
       Process.sleep(100)
 
-      :ok = RunnerLocal.resume(id, "payment_confirmed")
+      :ok = RunnerLocal.resume(id, :payment_confirmed)
       Process.sleep(100)
 
       {:ok, instance} = ETSStorage.get(storage, id)
@@ -95,13 +95,18 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
       {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.EventWorkflow, %{}, opts)
       Process.sleep(100)
 
-      :ok = RunnerLocal.resume(id, "payment_confirmed")
+      :ok = RunnerLocal.resume(id, :payment_confirmed)
       Process.sleep(100)
 
       {:ok, instance} = ETSStorage.get(storage, id)
 
       assert MapSet.subset?(
-               MapSet.new([:step_a, :wait_for_event, :step_b, :finish]),
+               MapSet.new([
+                 Hephaestus.Test.Event.StepA,
+                 Hephaestus.Test.Event.WaitForEvent,
+                 Hephaestus.Test.Event.StepB,
+                 Hephaestus.Steps.End
+               ]),
                instance.completed_steps
              )
     end
@@ -110,7 +115,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
       {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.EventWorkflow, %{}, opts)
       Process.sleep(100)
 
-      :ok = RunnerLocal.resume(id, "payment_confirmed")
+      :ok = RunnerLocal.resume(id, :payment_confirmed)
       Process.sleep(100)
 
       {:ok, instance} = ETSStorage.get(storage, id)
@@ -123,7 +128,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
       {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.AsyncWorkflow, %{}, opts)
       Process.sleep(100)
 
-      :ok = RunnerLocal.resume(id, "timeout")
+      :ok = RunnerLocal.resume(id, :timeout)
       Process.sleep(100)
 
       {:ok, instance} = ETSStorage.get(storage, id)
@@ -131,7 +136,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
     end
 
     test "returns error for nonexistent instance" do
-      assert {:error, :instance_not_found} = RunnerLocal.resume("nonexistent", "event")
+      assert {:error, :instance_not_found} = RunnerLocal.resume("nonexistent", :event)
     end
 
     test "returns error when the instance has already completed", %{opts: opts, storage: storage} do
@@ -140,7 +145,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
       instance = wait_for_instance(storage, id, &(&1.status == :completed))
       assert instance.active_steps == MapSet.new()
 
-      assert {:error, :instance_not_found} = RunnerLocal.resume(id, "timeout")
+      assert {:error, :instance_not_found} = RunnerLocal.resume(id, :timeout)
     end
   end
 
@@ -149,7 +154,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
       {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.AsyncWorkflow, %{}, opts)
       Process.sleep(100)
 
-      {:ok, _ref} = RunnerLocal.schedule_resume(id, :wait, 50)
+      {:ok, _ref} = RunnerLocal.schedule_resume(id, Hephaestus.Test.Async.Wait, 50)
       Process.sleep(200)
 
       {:ok, instance} = ETSStorage.get(storage, id)
@@ -157,7 +162,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
     end
 
     test "returns error for nonexistent instance" do
-      assert {:error, :instance_not_found} = RunnerLocal.schedule_resume("nonexistent", :wait, 50)
+      assert {:error, :instance_not_found} = RunnerLocal.schedule_resume("nonexistent", Hephaestus.Test.Async.Wait, 50)
     end
   end
 
@@ -168,10 +173,10 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
       Process.sleep(200)
       {:ok, instance} = ETSStorage.get(storage, id)
       assert instance.status == :completed
-      assert MapSet.member?(instance.completed_steps, :branch_a)
-      assert MapSet.member?(instance.completed_steps, :branch_b)
-      assert MapSet.member?(instance.completed_steps, :branch_c)
-      assert MapSet.member?(instance.completed_steps, :join)
+      assert MapSet.member?(instance.completed_steps, Hephaestus.Test.Parallel.BranchA)
+      assert MapSet.member?(instance.completed_steps, Hephaestus.Test.Parallel.BranchB)
+      assert MapSet.member?(instance.completed_steps, Hephaestus.Test.Parallel.BranchC)
+      assert MapSet.member?(instance.completed_steps, Hephaestus.Test.Parallel.Join)
     end
   end
 
@@ -183,10 +188,10 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
       {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.EventWorkflow, %{}, opts)
 
       waiting = wait_for_instance(storage, id, &(&1.status == :waiting))
-      assert waiting.current_step == :wait_for_event
-      assert waiting.active_steps == MapSet.new([:wait_for_event])
+      assert waiting.current_step == Hephaestus.Test.Event.WaitForEvent
+      assert waiting.active_steps == MapSet.new([Hephaestus.Test.Event.WaitForEvent])
 
-      :ok = RunnerLocal.resume(id, "payment_confirmed")
+      :ok = RunnerLocal.resume(id, :payment_confirmed)
 
       completed = wait_for_instance(storage, id, &(&1.status == :completed))
 
@@ -194,7 +199,12 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
       assert completed.active_steps == MapSet.new()
 
       assert MapSet.subset?(
-               MapSet.new([:step_a, :wait_for_event, :step_b, :finish]),
+               MapSet.new([
+                 Hephaestus.Test.Event.StepA,
+                 Hephaestus.Test.Event.WaitForEvent,
+                 Hephaestus.Test.Event.StepB,
+                 Hephaestus.Steps.End
+               ]),
                completed.completed_steps
              )
 
@@ -202,7 +212,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
                step_a: %{},
                wait_for_event: %{},
                step_b: %{processed: true},
-               finish: %{}
+               end: %{}
              }
       assert completed.execution_history == []
     end
@@ -219,7 +229,14 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
       assert completed.active_steps == MapSet.new()
 
       assert MapSet.subset?(
-               MapSet.new([:start, :branch_a, :branch_b, :branch_c, :join, :finish]),
+               MapSet.new([
+                 Hephaestus.Test.Parallel.Start,
+                 Hephaestus.Test.Parallel.BranchA,
+                 Hephaestus.Test.Parallel.BranchB,
+                 Hephaestus.Test.Parallel.BranchC,
+                 Hephaestus.Test.Parallel.Join,
+                 Hephaestus.Steps.End
+               ]),
                completed.completed_steps
              )
 
@@ -229,7 +246,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
                branch_b: %{processed: true},
                branch_c: %{processed: true},
                join: %{},
-               finish: %{}
+               end: %{}
              }
 
       assert completed.execution_history == []
@@ -270,7 +287,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
       refute new_pid == old_pid
       assert Process.alive?(new_pid)
 
-      :ok = RunnerLocal.resume(id, "timeout")
+      :ok = RunnerLocal.resume(id, :timeout)
       Process.sleep(100)
 
       {:ok, instance} = ETSStorage.get(storage, id)
@@ -283,7 +300,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
 
       {:ok, before_crash} = ETSStorage.get(storage, id)
       assert before_crash.status == :waiting
-      assert before_crash.completed_steps == MapSet.new([:step_a])
+      assert before_crash.completed_steps == MapSet.new([Hephaestus.Test.Async.StepA])
 
       registry = opts[:registry]
       assert [{pid, _}] = Registry.lookup(registry, id)
@@ -295,7 +312,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
       assert after_crash.status == :waiting
       assert after_crash.completed_steps == before_crash.completed_steps
 
-      :ok = RunnerLocal.resume(id, "timeout")
+      :ok = RunnerLocal.resume(id, :timeout)
       Process.sleep(100)
 
       {:ok, resumed} = ETSStorage.get(storage, id)
