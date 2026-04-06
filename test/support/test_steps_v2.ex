@@ -28,6 +28,28 @@ defmodule Hephaestus.Test.V2.StepC do
   def execute(_instance, _config, _context), do: {:ok, :done}
 end
 
+defmodule Hephaestus.Test.V2.AsyncWait do
+  @behaviour Hephaestus.Steps.Step
+
+  @impl true
+  def events, do: [:timeout]
+
+  @impl true
+  def execute(_instance, _config, _context), do: {:async}
+end
+
+defmodule Hephaestus.Test.V2.WaitForEvent do
+  @behaviour Hephaestus.Steps.Step
+
+  @impl true
+  def events, do: [:received]
+
+  @impl true
+  def execute(instance, config, context) do
+    Hephaestus.Steps.WaitForEvent.execute(instance, config, context)
+  end
+end
+
 defmodule Hephaestus.Test.V2.BranchStep do
   @behaviour Hephaestus.Steps.Step
 
@@ -36,7 +58,7 @@ defmodule Hephaestus.Test.V2.BranchStep do
 
   @impl true
   def execute(_instance, _config, context) do
-    if context.initial[:approved] do
+    if context.initial[:should_approve] || context.initial[:approved] do
       {:ok, :approved}
     else
       {:ok, :rejected}

@@ -19,7 +19,7 @@
 | 08 | [Runner + entry module: types](task-08-runner-entry.md) | 07 | completed |
 | 09 | [Migrar tests v1 para v2](task-09-update-v1-tests.md) | 02-08 | completed |
 | 10 | [Unit tests engine v2](task-10-unit-tests-engine.md) | 06, 07 | completed |
-| 11 | [Integration tests runtime](task-11-integration-tests.md) | 08, 09, 10 | pending |
+| 11 | [Integration tests runtime](task-11-integration-tests.md) | 08, 09, 10 | completed |
 
 ## Grafo de dependencias
 
