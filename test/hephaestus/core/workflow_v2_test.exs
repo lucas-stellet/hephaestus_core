@@ -283,7 +283,7 @@ defmodule Hephaestus.Core.WorkflowV2Test do
               @behaviour Hephaestus.Steps.Step
 
               @impl true
-              def events, do: ["done"]
+              def events, do: [123]
 
               @impl true
               def execute(_instance, _config, _context), do: {:ok, :done}

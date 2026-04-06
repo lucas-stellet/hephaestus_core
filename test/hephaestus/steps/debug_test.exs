@@ -53,7 +53,7 @@ defmodule Hephaestus.Steps.DebugTest do
 
     test "logs execution history" do
       entry = %ExecutionEntry{
-        step_ref: :validate,
+        step_ref: Hephaestus.Test.Linear.StepA,
         event: :valid,
         timestamp: ~U[2026-01-01 00:00:00Z]
       }
@@ -66,7 +66,7 @@ defmodule Hephaestus.Steps.DebugTest do
           Debug.execute(instance, nil, context)
         end)
 
-      assert log =~ "validate"
+      assert log =~ "StepA"
       assert log =~ "valid"
     end
   end

@@ -7,18 +7,22 @@ defmodule Hephaestus.Core.ExecutionEntryTest do
     test "creates entry with required fields" do
       now = DateTime.utc_now()
 
-      entry = %ExecutionEntry{step_ref: :validate, event: "valid", timestamp: now}
+      entry = %ExecutionEntry{
+        step_ref: Hephaestus.Test.Linear.StepA,
+        event: :valid,
+        timestamp: now
+      }
 
-      assert entry.step_ref == :validate
-      assert entry.event == "valid"
+      assert entry.step_ref == Hephaestus.Test.Linear.StepA
+      assert entry.event == :valid
       assert entry.timestamp == now
       assert entry.context_updates == nil
     end
 
     test "creates entry with context_updates" do
       entry = %ExecutionEntry{
-        step_ref: :validate,
-        event: "valid",
+        step_ref: Hephaestus.Test.Linear.StepA,
+        event: :valid,
         timestamp: DateTime.utc_now(),
         context_updates: %{email_valid: true}
       }
@@ -28,7 +32,7 @@ defmodule Hephaestus.Core.ExecutionEntryTest do
 
     test "raises when step_ref is missing" do
       assert_raise ArgumentError, fn ->
-        struct!(ExecutionEntry, event: "valid", timestamp: DateTime.utc_now())
+        struct!(ExecutionEntry, event: :valid, timestamp: DateTime.utc_now())
       end
     end
   end
