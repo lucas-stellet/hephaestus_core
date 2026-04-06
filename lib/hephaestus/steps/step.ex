@@ -18,11 +18,14 @@ defmodule Hephaestus.Steps.Step do
         @behaviour Hephaestus.Steps.Step
 
         @impl true
+        def events, do: [:valid, :invalid]
+
+        @impl true
         def execute(_instance, _config, context) do
           if context.initial[:items] && length(context.initial.items) > 0 do
-            {:ok, "valid", %{item_count: length(context.initial.items)}}
+            {:ok, :valid, %{item_count: length(context.initial.items)}}
           else
-            {:ok, "invalid"}
+            {:ok, :invalid}
           end
         end
       end
@@ -31,7 +34,7 @@ defmodule Hephaestus.Steps.Step do
   alias Hephaestus.Core.{Context, Instance}
 
   @type config :: map() | nil
-  @type event :: String.t()
+  @type event :: atom()
   @type context_updates :: map()
   @type result ::
           {:ok, event()}
@@ -39,5 +42,9 @@ defmodule Hephaestus.Steps.Step do
           | {:async}
           | {:error, term()}
 
+  @callback events() :: [event()]
+  @callback step_key() :: atom()
   @callback execute(instance :: Instance.t(), config :: config(), context :: Context.t()) :: result()
+
+  @optional_callbacks [step_key: 0]
 end
