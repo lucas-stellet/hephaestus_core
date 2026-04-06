@@ -106,49 +106,17 @@ defmodule Hephaestus.Core.Engine do
   end
 
   defp resolve_transit(workflow, from_module, event, %Instance{} = instance) do
-    with nil <- maybe_resolve_transit3(workflow, from_module, event, instance) do
-      maybe_resolve_transit2(workflow, from_module, event)
+    try do
+      workflow.transit(from_module, event, instance.context)
+    rescue
+      error in FunctionClauseError ->
+        if error.module == workflow and error.function == :transit and error.arity == 3 do
+          nil
+        else
+          reraise(error, __STACKTRACE__)
+        end
     end
   end
-
-  defp maybe_resolve_transit3(workflow, from_module, event, %Instance{} = instance) do
-    ensure_module_loaded(workflow)
-
-    if function_exported?(workflow, :transit, 3) do
-      try do
-        workflow.transit(from_module, event, instance.context)
-      rescue
-        error in FunctionClauseError ->
-          if transit_clause_miss?(error, workflow, :transit, 3) do
-            nil
-          else
-            reraise(error, __STACKTRACE__)
-          end
-      end
-    end
-  end
-
-  defp maybe_resolve_transit2(workflow, from_module, event) do
-    ensure_module_loaded(workflow)
-
-    if function_exported?(workflow, :transit, 2) do
-      try do
-        workflow.transit(from_module, event)
-      rescue
-        error in FunctionClauseError ->
-          if transit_clause_miss?(error, workflow, :transit, 2) do
-            nil
-          else
-            reraise(error, __STACKTRACE__)
-          end
-      end
-    end
-  end
-
-  defp transit_clause_miss?(%FunctionClauseError{module: module, function: function, arity: arity}, module, function, arity),
-    do: true
-
-  defp transit_clause_miss?(%FunctionClauseError{}, _module, _function, _arity), do: false
 
   defp maybe_activate_step(%Instance{} = instance, step_module, config) when is_atom(step_module) do
     predecessors = instance.workflow.__predecessors__(step_module)

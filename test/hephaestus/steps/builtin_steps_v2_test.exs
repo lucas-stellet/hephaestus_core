@@ -2,7 +2,7 @@ defmodule Hephaestus.Steps.BuiltinStepsV2Test do
   use ExUnit.Case, async: true
 
   alias Hephaestus.Core.{Context, Instance}
-  alias Hephaestus.Steps.{End, Debug, Wait, WaitForEvent}
+  alias Hephaestus.Steps.{Done, Debug, Wait, WaitForEvent}
 
   defp dummy_instance do
     %Instance{
@@ -16,18 +16,18 @@ defmodule Hephaestus.Steps.BuiltinStepsV2Test do
     }
   end
 
-  describe "End" do
-    test "events/0 returns [:end]" do
-      events = End.events()
+  describe "Done" do
+    test "events/0 returns [:done]" do
+      events = Done.events()
 
-      assert events == [:end]
+      assert events == [:done]
     end
 
-    test "execute/3 returns {:ok, :end}" do
+    test "execute/3 returns {:ok, :done}" do
       instance = dummy_instance()
-      result = End.execute(instance, nil, instance.context)
+      result = Done.execute(instance, nil, instance.context)
 
-      assert {:ok, :end} = result
+      assert {:ok, :done} = result
     end
   end
 

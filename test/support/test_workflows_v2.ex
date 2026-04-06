@@ -5,8 +5,8 @@ defmodule Hephaestus.Test.V2.LinearWorkflow do
   def start, do: Hephaestus.Test.V2.StepA
 
   @impl true
-  def transit(Hephaestus.Test.V2.StepA, :done), do: Hephaestus.Test.V2.StepB
-  def transit(Hephaestus.Test.V2.StepB, :done), do: Hephaestus.Steps.End
+  def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: Hephaestus.Test.V2.StepB
+  def transit(Hephaestus.Test.V2.StepB, :done, _ctx), do: Hephaestus.Steps.Done
 end
 
 defmodule Hephaestus.Test.V2.ConfigStartWorkflow do
@@ -16,7 +16,7 @@ defmodule Hephaestus.Test.V2.ConfigStartWorkflow do
   def start, do: {Hephaestus.Test.V2.ConfigStep, %{timeout: 5000}}
 
   @impl true
-  def transit(Hephaestus.Test.V2.ConfigStep, :done), do: Hephaestus.Steps.End
+  def transit(Hephaestus.Test.V2.ConfigStep, :done, _ctx), do: Hephaestus.Steps.Done
 end
 
 defmodule Hephaestus.Test.V2.BranchWorkflow do
@@ -26,10 +26,10 @@ defmodule Hephaestus.Test.V2.BranchWorkflow do
   def start, do: Hephaestus.Test.V2.BranchStep
 
   @impl true
-  def transit(Hephaestus.Test.V2.BranchStep, :approved), do: Hephaestus.Test.V2.ApproveStep
-  def transit(Hephaestus.Test.V2.BranchStep, :rejected), do: Hephaestus.Test.V2.RejectStep
-  def transit(Hephaestus.Test.V2.ApproveStep, :done), do: Hephaestus.Steps.End
-  def transit(Hephaestus.Test.V2.RejectStep, :done), do: Hephaestus.Steps.End
+  def transit(Hephaestus.Test.V2.BranchStep, :approved, _ctx), do: Hephaestus.Test.V2.ApproveStep
+  def transit(Hephaestus.Test.V2.BranchStep, :rejected, _ctx), do: Hephaestus.Test.V2.RejectStep
+  def transit(Hephaestus.Test.V2.ApproveStep, :done, _ctx), do: Hephaestus.Steps.Done
+  def transit(Hephaestus.Test.V2.RejectStep, :done, _ctx), do: Hephaestus.Steps.Done
 end
 
 defmodule Hephaestus.Test.V2.FanOutWorkflow do
@@ -39,12 +39,12 @@ defmodule Hephaestus.Test.V2.FanOutWorkflow do
   def start, do: Hephaestus.Test.V2.StepA
 
   @impl true
-  def transit(Hephaestus.Test.V2.StepA, :done),
+  def transit(Hephaestus.Test.V2.StepA, :done, _ctx),
     do: [Hephaestus.Test.V2.ParallelA, Hephaestus.Test.V2.ParallelB]
 
-  def transit(Hephaestus.Test.V2.ParallelA, :done), do: Hephaestus.Test.V2.JoinStep
-  def transit(Hephaestus.Test.V2.ParallelB, :done), do: Hephaestus.Test.V2.JoinStep
-  def transit(Hephaestus.Test.V2.JoinStep, :done), do: Hephaestus.Steps.End
+  def transit(Hephaestus.Test.V2.ParallelA, :done, _ctx), do: Hephaestus.Test.V2.JoinStep
+  def transit(Hephaestus.Test.V2.ParallelB, :done, _ctx), do: Hephaestus.Test.V2.JoinStep
+  def transit(Hephaestus.Test.V2.JoinStep, :done, _ctx), do: Hephaestus.Steps.Done
 end
 
 defmodule Hephaestus.Test.V2.AsyncWorkflow do
@@ -54,9 +54,9 @@ defmodule Hephaestus.Test.V2.AsyncWorkflow do
   def start, do: Hephaestus.Test.V2.StepA
 
   @impl true
-  def transit(Hephaestus.Test.V2.StepA, :done), do: Hephaestus.Test.V2.AsyncWait
-  def transit(Hephaestus.Test.V2.AsyncWait, :timeout), do: Hephaestus.Test.V2.StepB
-  def transit(Hephaestus.Test.V2.StepB, :done), do: Hephaestus.Steps.End
+  def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: Hephaestus.Test.V2.AsyncWait
+  def transit(Hephaestus.Test.V2.AsyncWait, :timeout, _ctx), do: Hephaestus.Test.V2.StepB
+  def transit(Hephaestus.Test.V2.StepB, :done, _ctx), do: Hephaestus.Steps.Done
 end
 
 defmodule Hephaestus.Test.V2.EventWorkflow do
@@ -66,9 +66,9 @@ defmodule Hephaestus.Test.V2.EventWorkflow do
   def start, do: Hephaestus.Test.V2.StepA
 
   @impl true
-  def transit(Hephaestus.Test.V2.StepA, :done), do: Hephaestus.Test.V2.WaitForEvent
-  def transit(Hephaestus.Test.V2.WaitForEvent, :received), do: Hephaestus.Test.V2.StepB
-  def transit(Hephaestus.Test.V2.StepB, :done), do: Hephaestus.Steps.End
+  def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: Hephaestus.Test.V2.WaitForEvent
+  def transit(Hephaestus.Test.V2.WaitForEvent, :received, _ctx), do: Hephaestus.Test.V2.StepB
+  def transit(Hephaestus.Test.V2.StepB, :done, _ctx), do: Hephaestus.Steps.Done
 end
 
 defmodule Hephaestus.Test.V2.DynamicWorkflow do
@@ -87,7 +87,6 @@ defmodule Hephaestus.Test.V2.DynamicWorkflow do
     end
   end
 
-  @impl true
-  def transit(Hephaestus.Test.V2.StepB, :done), do: Hephaestus.Steps.End
-  def transit(Hephaestus.Test.V2.StepC, :done), do: Hephaestus.Steps.End
+  def transit(Hephaestus.Test.V2.StepB, :done, _ctx), do: Hephaestus.Steps.Done
+  def transit(Hephaestus.Test.V2.StepC, :done, _ctx), do: Hephaestus.Steps.Done
 end

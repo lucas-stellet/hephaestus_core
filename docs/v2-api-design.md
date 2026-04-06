@@ -16,13 +16,13 @@ defmodule Pedidox.Workflows.OrderWorkflow do
   def start, do: Steps.ValidateOrder
 
   @impl true
-  def transit(Steps.ValidateOrder, "valid"), do: Steps.CalculateTotal
-  def transit(Steps.CalculateTotal, "high_value"), do: [Steps.CheckInventory, Steps.CheckFraud]
-  def transit(Steps.CalculateTotal, "low_value"), do: Steps.WaitForPayment
-  def transit(Steps.CheckInventory, "done"), do: Steps.WaitForPayment
-  def transit(Steps.CheckFraud, "done"), do: Steps.WaitForPayment
-  def transit(Steps.WaitForPayment, "payment_confirmed"), do: Steps.ConfirmOrder
-  def transit(Steps.ConfirmOrder, "confirmed"), do: :end
+  def transit(Steps.ValidateOrder, :valid), do: Steps.CalculateTotal
+  def transit(Steps.CalculateTotal, :high_value), do: [Steps.CheckInventory, Steps.CheckFraud]
+  def transit(Steps.CalculateTotal, :low_value), do: Steps.WaitForPayment
+  def transit(Steps.CheckInventory, :done), do: Steps.WaitForPayment
+  def transit(Steps.CheckFraud, :done), do: Steps.WaitForPayment
+  def transit(Steps.WaitForPayment, :payment_confirmed), do: Steps.ConfirmOrder
+  def transit(Steps.ConfirmOrder, :confirmed), do: :end
 end
 ```
 
@@ -41,7 +41,7 @@ Retorna o step module inicial (ou `{module, config}`).
 Pattern matching puro: recebe quem emitiu + o evento emitido, retorna pra onde ir.
 
 ```elixir
-@callback transit(from :: module(), event :: String.t()) ::
+@callback transit(from :: module(), event :: atom()) ::
   module()
   | {module(), config :: map() | struct()}
   | [module() | {module(), config :: map() | struct()}]
@@ -79,16 +79,16 @@ defmodule Steps.CalculateTotal do
   def execute(_instance, _config, context) do
     total = Enum.sum(Enum.map(context.initial.items, & &1.price))
     if total > 100 do
-      {:ok, "high_value", %{total: total}}
+      {:ok, :high_value, %{total: total}}
     else
-      {:ok, "low_value", %{total: total}}
+      {:ok, :low_value, %{total: total}}
     end
   end
 end
 
 # Transit roteia — sem lógica
-def transit(Steps.CalculateTotal, "high_value"), do: [Steps.CheckInventory, Steps.CheckFraud]
-def transit(Steps.CalculateTotal, "low_value"), do: Steps.WaitForPayment
+def transit(Steps.CalculateTotal, :high_value), do: [Steps.CheckInventory, Steps.CheckFraud]
+def transit(Steps.CalculateTotal, :low_value), do: Steps.WaitForPayment
 ```
 
 ### 4. Fan-out é lista no transit
@@ -103,7 +103,7 @@ Fan-in é automático: quando múltiplos steps apontam pro mesmo target, o engin
 
 ```elixir
 # Sem config — módulo direto
-def transit(Steps.Validate, "valid"), do: Steps.Process
+def transit(Steps.Validate, :valid), do: Steps.Process
 
 # Com config — tupla
 def transit(Steps.Process, "ready"), do: {Steps.WaitForPayment, %WaitConfig{event_name: "payment"}}
@@ -112,7 +112,7 @@ def transit(Steps.Process, "ready"), do: {Steps.WaitForPayment, %WaitConfig{even
 ### 6. `:end` termina o workflow
 
 ```elixir
-def transit(Steps.ConfirmOrder, "confirmed"), do: :end
+def transit(Steps.ConfirmOrder, :confirmed), do: :end
 ```
 
 `Hephaestus.Steps.End` pode ser removido — `:end` substitui.
@@ -159,8 +159,8 @@ Compile-time valida o grafo (DAG). Runtime valida os módulos (behaviours).
 
 ```elixir
 @callback execute(instance :: Instance.t(), config :: map() | nil, context :: Context.t()) ::
-  {:ok, event :: String.t()}
-  | {:ok, event :: String.t(), context_updates :: map()}
+  {:ok, event :: atom()}
+  | {:ok, event :: atom(), context_updates :: map()}
   | {:async}
   | {:error, reason :: term()}
 ```
@@ -168,8 +168,8 @@ Compile-time valida o grafo (DAG). Runtime valida os módulos (behaviours).
 ## Retornos do step
 
 ```elixir
-{:ok, "event"}                    # roteia via transit
-{:ok, "event", %{dados: "aqui"}}  # roteia + guarda dados em context.steps.<key>
+{:ok, :event}                    # roteia via transit
+{:ok, :event, %{dados: "aqui"}}  # roteia + guarda dados em context.steps.<key>
 {:async}                          # pausa (wait, wait_for_event)
 {:error, reason}                  # falha
 ```
@@ -209,11 +209,11 @@ step_module.execute(instance, config, instance.context)
 
 ```elixir
 # Estático — macro extrai tudo
-def transit(Steps.ValidateOrder, "valid"), do: Steps.CalculateTotal
+def transit(Steps.ValidateOrder, :valid), do: Steps.CalculateTotal
 
 # Dinâmico — @targets declara destinos pro DAG
 @targets [Steps.CheckInventory, Steps.CheckFraud, Steps.WaitForPayment]
-def transit(Steps.CalculateTotal, "calculated", ctx) do
+def transit(Steps.CalculateTotal, :calculated, ctx) do
   if ctx.steps.calculate_total.total > 100 do
     [Steps.CheckInventory, Steps.CheckFraud]
   else
@@ -288,31 +288,76 @@ defmodule Steps.CheckInventory do
   @behaviour Hephaestus.Steps.Step
 
   @impl true
-  def events, do: ["done", "out_of_stock"]
+  def events, do: [:done, :out_of_stock]
 
   @impl true
-  def execute(_instance, _config, _context), do: {:ok, "done", %{in_stock: true}}
+  def execute(_instance, _config, _context), do: {:ok, :done, %{in_stock: true}}
 end
 ```
 
 O `@before_compile` cruza `events/0` de cada step com as clauses do `transit`:
 
 - Evento declarado sem transit → erro:
-  `Steps.CheckInventory declares event "out_of_stock" but no transit handles it`
+  `Steps.CheckInventory declares event :out_of_stock but no transit handles it`
 
 - Transit referencia evento não declarado → erro:
-  `transit handles (Steps.CheckInventory, "timeout") but step does not declare "timeout" in events/0`
+  `transit handles (Steps.CheckInventory, :timeout) but step does not declare :timeout in events/0`
 
 Step behaviour atualizado:
 
 ```elixir
 defmodule Hephaestus.Steps.Step do
-  @callback events() :: [String.t()]
+  @callback events() :: [atom()]
   @callback execute(instance :: Instance.t(), config :: map() | nil, context :: Context.t()) :: result()
 end
 ```
 
 Cobertura total em compile-time: todo evento tem transit, todo transit referencia evento declarado.
+
+### 16. Eventos como atoms, não strings (decidido)
+
+Eventos retornados por steps e usados no transit são atoms, não strings:
+
+```elixir
+# Step
+def events, do: [:valid, :invalid]
+def execute(_instance, _config, _context), do: {:ok, :valid, %{}}
+
+# Transit
+def transit(Steps.ValidateOrder, :valid), do: Steps.CalculateTotal
+```
+
+Motivos: pattern matching idiomático, sem typos silenciosos, consistente com o resto da API, mais leve no BEAM.
+
+O `@before_compile` valida que eventos declarados em `events/0` são atoms.
+
+### 17. Manter Hephaestus.Steps.End como step concreto (decidido)
+
+Sem `:end` especial no transit. Todo workflow termina num step real que implementa o behaviour:
+
+```elixir
+defmodule Hephaestus.Steps.End do
+  @behaviour Hephaestus.Steps.Step
+
+  @impl true
+  def events, do: [:end]
+
+  @impl true
+  def execute(_instance, _config, _context), do: {:ok, :end}
+end
+```
+
+O transit aponta pro End como qualquer outro step:
+
+```elixir
+def transit(Steps.ConfirmOrder, :confirmed), do: Hephaestus.Steps.End
+```
+
+Um step é terminal quando seus eventos não têm transit correspondente. `End` é built-in conveniente — o dev pode criar seus próprios terminais.
+
+### 18. Substituição direta da API v1 (decidido)
+
+Breaking change. Remove `definition/0`, `%Step{}`, `StepDefinition` protocol. Versão 0.2.0. Sem coexistência temporária.
 
 ## Todos os problemas resolvidos
 
@@ -322,8 +367,11 @@ Cobertura total em compile-time: todo evento tem transit, todo transit referenci
 | 2 | Config flow | `step_configs: %{}` no Instance. `active_steps` continua MapSet |
 | 3 | Extrair patterns do AST | Macro intercepta `def transit` e acumula edges via attribute |
 | 4 | `:end` em fan-out | Branches DEVEM convergir. `:end` sem join é erro de compilação |
-| 5 | Evento sem match no transit | `events/0` obrigatório. Validação cruzada em compile-time |
+| 5 | Evento sem match no transit | `events/0` obrigatório (atoms). Validação cruzada em compile-time |
 | 6 | Guards e lógica no transit | `transit/2` estático + `transit/3` dinâmico com `@targets` |
+| 11 | Eventos como atoms | Atoms em vez de strings. Idiomático, sem typos silenciosos |
+| 12 | Manter Steps.End | Step concreto, sem `:end` especial. Terminal = eventos sem transit |
+| 13 | Substituição direta | Breaking change v1→v2. Versão 0.2.0 |
 | 7 | Context keys legíveis | Auto snake_case do módulo. Colisão = erro de compilação |
 | 8 | Validação runtime de módulos | Engine checa `function_exported?(module, :execute, 3)` |
 | 9 | DAG validation | `libgraph` como dependência |

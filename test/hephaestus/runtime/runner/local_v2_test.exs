@@ -40,7 +40,7 @@ defmodule Hephaestus.Runtime.Runner.LocalV2Test do
 
       assert MapSet.member?(instance.completed_steps, Hephaestus.Test.V2.StepA)
       assert MapSet.member?(instance.completed_steps, Hephaestus.Test.V2.StepB)
-      assert MapSet.member?(instance.completed_steps, Hephaestus.Steps.End)
+      assert MapSet.member?(instance.completed_steps, Hephaestus.Steps.Done)
     end
   end
 

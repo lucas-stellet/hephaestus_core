@@ -105,7 +105,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
                  Hephaestus.Test.Event.StepA,
                  Hephaestus.Test.Event.WaitForEvent,
                  Hephaestus.Test.Event.StepB,
-                 Hephaestus.Steps.End
+                 Hephaestus.Steps.Done
                ]),
                instance.completed_steps
              )
@@ -203,7 +203,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
                  Hephaestus.Test.Event.StepA,
                  Hephaestus.Test.Event.WaitForEvent,
                  Hephaestus.Test.Event.StepB,
-                 Hephaestus.Steps.End
+                 Hephaestus.Steps.Done
                ]),
                completed.completed_steps
              )
@@ -212,7 +212,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
                step_a: %{},
                wait_for_event: %{},
                step_b: %{processed: true},
-               end: %{}
+               done: %{}
              }
       assert completed.execution_history == []
     end
@@ -235,7 +235,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
                  Hephaestus.Test.Parallel.BranchB,
                  Hephaestus.Test.Parallel.BranchC,
                  Hephaestus.Test.Parallel.Join,
-                 Hephaestus.Steps.End
+                 Hephaestus.Steps.Done
                ]),
                completed.completed_steps
              )
@@ -246,7 +246,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
                branch_b: %{processed: true},
                branch_c: %{processed: true},
                join: %{},
-               end: %{}
+               done: %{}
              }
 
       assert completed.execution_history == []

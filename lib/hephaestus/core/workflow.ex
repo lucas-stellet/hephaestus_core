@@ -5,8 +5,7 @@ defmodule Hephaestus.Core.Workflow do
   Workflows are declared with `use Hephaestus.Workflow` and must expose:
 
     * `start/0`
-    * `transit/2`
-    * optional `transit/3` paired with `@targets`
+    * `transit/3` — static clauses ignore context with `_ctx`, dynamic clauses use `@targets`
 
   The `Hephaestus.Workflow` macro extracts the workflow DAG at compile time,
   validates it, and generates helper functions for runtime coordination.
@@ -17,15 +16,10 @@ defmodule Hephaestus.Core.Workflow do
 
   @callback start() :: target()
 
-  @callback transit(from :: module(), event :: atom()) ::
-              target() | [target()] | nil
-
   @callback transit(from :: module(), event :: atom(), context :: Hephaestus.Core.Context.t()) ::
               target() | [target()] | nil
 
-  @optional_callbacks [transit: 3]
-
-  @end_step Hephaestus.Steps.End
+  @end_step Hephaestus.Steps.Done
 
   @type edge :: %{
           from: module(),
@@ -259,7 +253,17 @@ defmodule Hephaestus.Core.Workflow do
 end
 
 defmodule Hephaestus.Workflow do
-  @moduledoc false
+  @moduledoc """
+  Macro module for defining workflows with callback-based pattern matching.
+
+  Add `use Hephaestus.Workflow` to a module to declare a workflow via
+  `start/0` and `transit/3`. Static clauses ignore the context argument
+  with `_ctx`. Dynamic clauses use `@targets` before the clause to declare
+  possible destinations for DAG validation. The macro extracts the step DAG
+  at compile time, validates it with `libgraph`, cross-checks `events/0`
+  declarations, and generates `__predecessors__/1` and `__graph__/0` helpers
+  for runtime coordination.
+  """
 
   @dynamic_edges_attr :hephaestus_dynamic_edges
 
@@ -274,27 +278,26 @@ defmodule Hephaestus.Workflow do
   end
 
   def __on_definition__(env, _kind, :transit, args, _guards, _body) when length(args) == 3 do
-    [from_ast, event_ast, _context_ast] = args
     targets = Module.get_attribute(env.module, :targets)
-    Module.delete_attribute(env.module, :targets)
 
-    if is_nil(targets) do
-      raise CompileError,
-        file: env.file,
-        line: env.line,
-        description: "transit/3 requires @targets with all possible destination modules"
+    if targets do
+      # Dynamic clause — @targets declared, body has logic
+      Module.delete_attribute(env.module, :targets)
+
+      [from_ast, event_ast, _context_ast] = args
+      from = expand_step_module!(from_ast, env, "transit/3 source")
+      event = expand_event!(event_ast, env, "transit/3 event")
+      expanded_targets = expand_targets!(targets, env, "transit/3 @targets")
+
+      Module.put_attribute(env.module, @dynamic_edges_attr, %{
+        from: from,
+        event: event,
+        targets: expanded_targets,
+        dynamic?: true
+      })
     end
 
-    from = expand_step_module!(from_ast, env, "transit/3 source")
-    event = expand_event!(event_ast, env, "transit/3 event")
-    expanded_targets = expand_targets!(targets, env, "transit/3 @targets")
-
-    Module.put_attribute(env.module, @dynamic_edges_attr, %{
-      from: from,
-      event: event,
-      targets: expanded_targets,
-      dynamic?: true
-    })
+    # Static clauses (no @targets) are extracted in @before_compile via Module.get_definition
   end
 
   def __on_definition__(_env, _kind, _name, _args, _guards, _body), do: :ok
@@ -327,19 +330,32 @@ defmodule Hephaestus.Workflow do
   end
 
   defp extract_static_edges!(env) do
-    case Module.get_definition(env.module, {:transit, 2}) do
+    dynamic_edges = Module.get_attribute(env.module, @dynamic_edges_attr) || []
+    dynamic_keys = MapSet.new(dynamic_edges, fn %{from: from, event: event} -> {from, event} end)
+
+    case Module.get_definition(env.module, {:transit, 3}) do
       nil ->
         []
 
       {:v1, :def, _meta, clauses} ->
-        Enum.map(clauses, fn {_clause_meta, [from_ast, event_ast], _guards, body} ->
-          %{
-            from: expand_step_module!(from_ast, env, "transit/2 source"),
-            event: expand_event!(event_ast, env, "transit/2 event"),
-            targets: extract_targets!(body, env, "transit/2 body"),
-            dynamic?: false
-          }
+        clauses
+        |> Enum.map(fn {_clause_meta, [from_ast, event_ast, _ctx_ast], _guards, body} ->
+          from = expand_step_module!(from_ast, env, "transit/3 source")
+          event = expand_event!(event_ast, env, "transit/3 event")
+
+          if MapSet.member?(dynamic_keys, {from, event}) do
+            # Dynamic clause — already captured by __on_definition__, skip
+            nil
+          else
+            %{
+              from: from,
+              event: event,
+              targets: extract_targets!(body, env, "transit/3 body"),
+              dynamic?: false
+            }
+          end
         end)
+        |> Enum.reject(&is_nil/1)
     end
   end
 

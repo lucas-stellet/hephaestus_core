@@ -11,15 +11,15 @@ defmodule Hephaestus.Core.WorkflowV2Test do
         def start, do: Hephaestus.Test.V2.StepA
 
         @impl true
-        def transit(Hephaestus.Test.V2.StepA, :done), do: Hephaestus.Test.V2.StepB
-        def transit(Hephaestus.Test.V2.StepB, :done), do: Hephaestus.Steps.End
+        def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: Hephaestus.Test.V2.StepB
+        def transit(Hephaestus.Test.V2.StepB, :done, _ctx), do: Hephaestus.Steps.Done
       end
 
       # Assert
       preds_b = LinearFlow.__predecessors__(Hephaestus.Test.V2.StepB)
       assert MapSet.member?(preds_b, Hephaestus.Test.V2.StepA)
 
-      preds_end = LinearFlow.__predecessors__(Hephaestus.Steps.End)
+      preds_end = LinearFlow.__predecessors__(Hephaestus.Steps.Done)
       assert MapSet.member?(preds_end, Hephaestus.Test.V2.StepB)
     end
 
@@ -32,10 +32,10 @@ defmodule Hephaestus.Core.WorkflowV2Test do
         def start, do: Hephaestus.Test.V2.BranchStep
 
         @impl true
-        def transit(Hephaestus.Test.V2.BranchStep, :approved), do: Hephaestus.Test.V2.ApproveStep
-        def transit(Hephaestus.Test.V2.BranchStep, :rejected), do: Hephaestus.Test.V2.RejectStep
-        def transit(Hephaestus.Test.V2.ApproveStep, :done), do: Hephaestus.Steps.End
-        def transit(Hephaestus.Test.V2.RejectStep, :done), do: Hephaestus.Steps.End
+        def transit(Hephaestus.Test.V2.BranchStep, :approved, _ctx), do: Hephaestus.Test.V2.ApproveStep
+        def transit(Hephaestus.Test.V2.BranchStep, :rejected, _ctx), do: Hephaestus.Test.V2.RejectStep
+        def transit(Hephaestus.Test.V2.ApproveStep, :done, _ctx), do: Hephaestus.Steps.Done
+        def transit(Hephaestus.Test.V2.RejectStep, :done, _ctx), do: Hephaestus.Steps.Done
       end
 
       # Assert
@@ -52,10 +52,10 @@ defmodule Hephaestus.Core.WorkflowV2Test do
         def start, do: Hephaestus.Test.V2.StepA
 
         @impl true
-        def transit(Hephaestus.Test.V2.StepA, :done), do: [Hephaestus.Test.V2.ParallelA, Hephaestus.Test.V2.ParallelB]
-        def transit(Hephaestus.Test.V2.ParallelA, :done), do: Hephaestus.Test.V2.JoinStep
-        def transit(Hephaestus.Test.V2.ParallelB, :done), do: Hephaestus.Test.V2.JoinStep
-        def transit(Hephaestus.Test.V2.JoinStep, :done), do: Hephaestus.Steps.End
+        def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: [Hephaestus.Test.V2.ParallelA, Hephaestus.Test.V2.ParallelB]
+        def transit(Hephaestus.Test.V2.ParallelA, :done, _ctx), do: Hephaestus.Test.V2.JoinStep
+        def transit(Hephaestus.Test.V2.ParallelB, :done, _ctx), do: Hephaestus.Test.V2.JoinStep
+        def transit(Hephaestus.Test.V2.JoinStep, :done, _ctx), do: Hephaestus.Steps.Done
       end
 
       # Assert
@@ -76,8 +76,8 @@ defmodule Hephaestus.Core.WorkflowV2Test do
         @targets [Hephaestus.Test.V2.StepB, Hephaestus.Test.V2.StepC]
         def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: Hephaestus.Test.V2.StepB
 
-        def transit(Hephaestus.Test.V2.StepB, :done), do: Hephaestus.Steps.End
-        def transit(Hephaestus.Test.V2.StepC, :done), do: Hephaestus.Steps.End
+        def transit(Hephaestus.Test.V2.StepB, :done, _ctx), do: Hephaestus.Steps.Done
+        def transit(Hephaestus.Test.V2.StepC, :done, _ctx), do: Hephaestus.Steps.Done
       end
 
       # Assert
@@ -97,8 +97,8 @@ defmodule Hephaestus.Core.WorkflowV2Test do
         def start, do: Hephaestus.Test.V2.StepA
 
         @impl true
-        def transit(Hephaestus.Test.V2.StepA, :done), do: Hephaestus.Test.V2.StepB
-        def transit(Hephaestus.Test.V2.StepB, :done), do: Hephaestus.Steps.End
+        def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: Hephaestus.Test.V2.StepB
+        def transit(Hephaestus.Test.V2.StepB, :done, _ctx), do: Hephaestus.Steps.Done
       end
 
       # Act
@@ -121,8 +121,8 @@ defmodule Hephaestus.Core.WorkflowV2Test do
             def start, do: Hephaestus.Test.V2.StepA
 
             @impl true
-            def transit(Hephaestus.Test.V2.StepA, :done), do: Hephaestus.Test.V2.StepB
-            def transit(Hephaestus.Test.V2.StepB, :done), do: Hephaestus.Test.V2.StepA
+            def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: Hephaestus.Test.V2.StepB
+            def transit(Hephaestus.Test.V2.StepB, :done, _ctx), do: Hephaestus.Test.V2.StepA
           end
         end)
       end
@@ -139,16 +139,16 @@ defmodule Hephaestus.Core.WorkflowV2Test do
             def start, do: Hephaestus.Test.V2.StepA
 
             @impl true
-            def transit(Hephaestus.Test.V2.StepA, :done), do: Hephaestus.Steps.End
-            def transit(Hephaestus.Test.V2.StepB, :done), do: Hephaestus.Steps.End
+            def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: Hephaestus.Steps.Done
+            def transit(Hephaestus.Test.V2.StepB, :done, _ctx), do: Hephaestus.Steps.Done
           end
         end)
       end
     end
 
-    test "raises on leaf node that is not Hephaestus.Steps.End" do
+    test "raises on leaf node that is not Hephaestus.Steps.Done" do
       # Assert
-      assert_raise CompileError, ~r/Hephaestus\.Steps\.End/, fn ->
+      assert_raise CompileError, ~r/Hephaestus\.Steps\.Done/, fn ->
         Code.compile_quoted(quote do
           defmodule NoEndFlow do
             use Hephaestus.Workflow
@@ -157,7 +157,7 @@ defmodule Hephaestus.Core.WorkflowV2Test do
             def start, do: Hephaestus.Test.V2.StepA
 
             @impl true
-            def transit(Hephaestus.Test.V2.StepA, :done), do: Hephaestus.Test.V2.StepB
+            def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: Hephaestus.Test.V2.StepB
           end
         end)
       end
@@ -174,9 +174,9 @@ defmodule Hephaestus.Core.WorkflowV2Test do
             def start, do: Hephaestus.Test.V2.StepA
 
             @impl true
-            def transit(Hephaestus.Test.V2.StepA, :done), do: [Hephaestus.Test.V2.ParallelA, Hephaestus.Test.V2.ParallelB]
-            def transit(Hephaestus.Test.V2.ParallelA, :done), do: Hephaestus.Steps.End
-            def transit(Hephaestus.Test.V2.ParallelB, :done), do: Hephaestus.Steps.End
+            def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: [Hephaestus.Test.V2.ParallelA, Hephaestus.Test.V2.ParallelB]
+            def transit(Hephaestus.Test.V2.ParallelA, :done, _ctx), do: Hephaestus.Steps.Done
+            def transit(Hephaestus.Test.V2.ParallelB, :done, _ctx), do: Hephaestus.Steps.Done
           end
         end)
       end
@@ -193,7 +193,7 @@ defmodule Hephaestus.Core.WorkflowV2Test do
             def start, do: Hephaestus.Test.V2.StepWithExtraEvent
 
             @impl true
-            def transit(Hephaestus.Test.V2.StepWithExtraEvent, :done), do: Hephaestus.Steps.End
+            def transit(Hephaestus.Test.V2.StepWithExtraEvent, :done, _ctx), do: Hephaestus.Steps.Done
           end
         end)
       end
@@ -210,7 +210,7 @@ defmodule Hephaestus.Core.WorkflowV2Test do
             def start, do: Hephaestus.Test.V2.StepA
 
             @impl true
-            def transit(Hephaestus.Test.V2.StepA, :timeout), do: Hephaestus.Steps.End
+            def transit(Hephaestus.Test.V2.StepA, :timeout, _ctx), do: Hephaestus.Steps.Done
           end
         end)
       end
@@ -247,26 +247,8 @@ defmodule Hephaestus.Core.WorkflowV2Test do
             def start, do: Foo.Validate
 
             @impl true
-            def transit(Foo.Validate, :done), do: Bar.Validate
-            def transit(Bar.Validate, :done), do: Hephaestus.Steps.End
-          end
-        end)
-      end
-    end
-
-    test "raises on transit/3 without @targets" do
-      # Assert
-      assert_raise CompileError, ~r/@targets/, fn ->
-        Code.compile_quoted(quote do
-          defmodule MissingTargetsFlow do
-            use Hephaestus.Workflow
-
-            @impl true
-            def start, do: Hephaestus.Test.V2.StepA
-
-            @impl true
-            def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: Hephaestus.Test.V2.StepB
-            def transit(Hephaestus.Test.V2.StepB, :done), do: Hephaestus.Steps.End
+            def transit(Foo.Validate, :done, _ctx), do: Bar.Validate
+            def transit(Bar.Validate, :done, _ctx), do: Hephaestus.Steps.Done
           end
         end)
       end
@@ -293,7 +275,7 @@ defmodule Hephaestus.Core.WorkflowV2Test do
             def start, do: BadStep
 
             @impl true
-            def transit(BadStep, :done), do: Hephaestus.Steps.End
+            def transit(BadStep, :done, _ctx), do: Hephaestus.Steps.Done
           end
         end)
       end

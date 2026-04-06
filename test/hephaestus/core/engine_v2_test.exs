@@ -5,10 +5,10 @@ defmodule Hephaestus.Test.V2.EngineBranchWorkflow do
   def start, do: Hephaestus.Test.V2.BranchStep
 
   @impl true
-  def transit(Hephaestus.Test.V2.BranchStep, :approved), do: Hephaestus.Test.V2.ApproveStep
-  def transit(Hephaestus.Test.V2.BranchStep, :rejected), do: Hephaestus.Test.V2.RejectStep
-  def transit(Hephaestus.Test.V2.ApproveStep, :done), do: Hephaestus.Steps.End
-  def transit(Hephaestus.Test.V2.RejectStep, :done), do: Hephaestus.Steps.End
+  def transit(Hephaestus.Test.V2.BranchStep, :approved, _ctx), do: Hephaestus.Test.V2.ApproveStep
+  def transit(Hephaestus.Test.V2.BranchStep, :rejected, _ctx), do: Hephaestus.Test.V2.RejectStep
+  def transit(Hephaestus.Test.V2.ApproveStep, :done, _ctx), do: Hephaestus.Steps.Done
+  def transit(Hephaestus.Test.V2.RejectStep, :done, _ctx), do: Hephaestus.Steps.Done
 end
 
 defmodule Hephaestus.Test.V2.EngineDynamicWorkflow do
@@ -28,8 +28,8 @@ defmodule Hephaestus.Test.V2.EngineDynamicWorkflow do
   end
 
   @impl true
-  def transit(Hephaestus.Test.V2.StepB, :done), do: Hephaestus.Steps.End
-  def transit(Hephaestus.Test.V2.StepC, :done), do: Hephaestus.Steps.End
+  def transit(Hephaestus.Test.V2.StepB, :done, _ctx), do: Hephaestus.Steps.Done
+  def transit(Hephaestus.Test.V2.StepC, :done, _ctx), do: Hephaestus.Steps.Done
 end
 
 defmodule Hephaestus.Core.EngineV2Test do
@@ -158,8 +158,8 @@ defmodule Hephaestus.Core.EngineV2Test do
         def start, do: Hephaestus.Test.V2.StepA
 
         @impl true
-        def transit(Hephaestus.Test.V2.StepA, :done), do: {Hephaestus.Test.V2.ConfigStep, %{timeout: 1000}}
-        def transit(Hephaestus.Test.V2.ConfigStep, :done), do: Hephaestus.Steps.End
+        def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: {Hephaestus.Test.V2.ConfigStep, %{timeout: 1000}}
+        def transit(Hephaestus.Test.V2.ConfigStep, :done, _ctx), do: Hephaestus.Steps.Done
       end
 
       instance = %{Instance.new(TransitionConfigWorkflow, %{}) |
@@ -192,12 +192,12 @@ defmodule Hephaestus.Core.EngineV2Test do
 
       inst = Engine.complete_step(inst, Hephaestus.Test.V2.StepB, :done, ctx)
       inst = Engine.activate_transitions(inst, Hephaestus.Test.V2.StepB, :done)
-      assert MapSet.member?(inst.active_steps, Hephaestus.Steps.End)
+      assert MapSet.member?(inst.active_steps, Hephaestus.Steps.Done)
 
-      {:ok, event} = Engine.execute_step(inst, Hephaestus.Steps.End)
-      assert event == :end
+      {:ok, event} = Engine.execute_step(inst, Hephaestus.Steps.Done)
+      assert event == :done
 
-      inst = Engine.complete_step(inst, Hephaestus.Steps.End, :end, %{})
+      inst = Engine.complete_step(inst, Hephaestus.Steps.Done, :done, %{})
       inst = Engine.check_completion(inst)
 
       assert inst.status == :completed
