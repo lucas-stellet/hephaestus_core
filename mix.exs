@@ -44,6 +44,7 @@ defmodule Hephaestus.MixProject do
       source_ref: "v#{@version}",
       source_url: @source_url,
       extras: [
+        "CHANGELOG.md",
         "guides/getting-started.md",
         "guides/architecture.md",
         "guides/extensions.md"
