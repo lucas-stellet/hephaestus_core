@@ -18,5 +18,5 @@ defmodule Hephaestus.Runtime.Runner do
               instance_id :: String.t(),
               step_ref :: atom(),
               delay_ms :: pos_integer()
-            ) :: {:ok, reference :: reference()} | {:error, reason :: term()}
+            ) :: {:ok, reference :: term()} | {:error, reason :: term()}
 end
