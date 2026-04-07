@@ -28,6 +28,15 @@ defmodule Hephaestus.Core.Workflow do
           dynamic?: boolean
         }
 
+  @doc """
+  Validates the workflow DAG built from the given start target and edges.
+
+  Checks that the graph is acyclic, all steps are reachable from start,
+  leaf nodes terminate at `Hephaestus.Steps.Done`, fan-out branches converge,
+  context keys don't collide, and step events match transit clauses.
+
+  Returns the validated graph and a predecessors map. Raises `CompileError` on any violation.
+  """
   @spec validate!(module(), module() | {module(), map() | struct()}, [edge()], Macro.Env.t()) ::
           %{graph: Graph.t(), predecessors: %{optional(module()) => MapSet.t(module())}}
   def validate!(workflow_module, start, edges, env) do
@@ -51,7 +60,10 @@ defmodule Hephaestus.Core.Workflow do
   defp normalize_start_module!({module, _config}, _env) when is_atom(module), do: module
 
   defp normalize_start_module!(other, env) do
-    compile_error!(env, "start/0 must return a step module or {step_module, config}, got: #{inspect(other)}")
+    compile_error!(
+      env,
+      "start/0 must return a step module or {step_module, config}, got: #{inspect(other)}"
+    )
   end
 
   defp build_graph(start_module, edges) do
@@ -166,7 +178,12 @@ defmodule Hephaestus.Core.Workflow do
         :ok
 
       step_module ->
-        validate_step_events!(workflow_module, step_module, Map.get(transit_events, step_module, MapSet.new()), env)
+        validate_step_events!(
+          workflow_module,
+          step_module,
+          Map.get(transit_events, step_module, MapSet.new()),
+          env
+        )
     end)
   end
 
@@ -240,7 +257,10 @@ defmodule Hephaestus.Core.Workflow do
         :ok
 
       {:error, reason} ->
-        compile_error!(env, "unable to load step module #{inspect(step_module)}: #{inspect(reason)}")
+        compile_error!(
+          env,
+          "unable to load step module #{inspect(step_module)}: #{inspect(reason)}"
+        )
     end
   end
 
@@ -267,6 +287,7 @@ defmodule Hephaestus.Workflow do
 
   @dynamic_edges_attr :hephaestus_dynamic_edges
 
+  @doc false
   defmacro __using__(_opts) do
     quote do
       @behaviour Hephaestus.Core.Workflow
@@ -277,6 +298,7 @@ defmodule Hephaestus.Workflow do
     end
   end
 
+  @doc false
   def __on_definition__(env, _kind, :transit, args, _guards, _body) when length(args) == 3 do
     targets = Module.get_attribute(env.module, :targets)
 
@@ -302,10 +324,16 @@ defmodule Hephaestus.Workflow do
 
   def __on_definition__(_env, _kind, _name, _args, _guards, _body), do: :ok
 
+  @doc false
   defmacro __before_compile__(env) do
     start = extract_start!(env)
-    edges = extract_static_edges!(env) ++ Enum.reverse(Module.get_attribute(env.module, @dynamic_edges_attr) || [])
-    %{graph: graph, predecessors: predecessors} = Hephaestus.Core.Workflow.validate!(env.module, start, edges, env)
+
+    edges =
+      extract_static_edges!(env) ++
+        Enum.reverse(Module.get_attribute(env.module, @dynamic_edges_attr) || [])
+
+    %{graph: graph, predecessors: predecessors} =
+      Hephaestus.Core.Workflow.validate!(env.module, start, edges, env)
 
     graph_ast = Macro.escape(graph)
     predecessors_ast = Macro.escape(predecessors)
@@ -381,7 +409,8 @@ defmodule Hephaestus.Workflow do
     raise CompileError,
       file: env.file,
       line: env.line,
-      description: "#{context} must return step modules, {step_module, config}, or lists of them, got: #{inspect(other)}"
+      description:
+        "#{context} must return step modules, {step_module, config}, or lists of them, got: #{inspect(other)}"
   end
 
   defp expand_targets!(targets, env, context) when is_list(targets) do
@@ -422,7 +451,8 @@ defmodule Hephaestus.Workflow do
     end
   end
 
-  defp maybe_resolve_nested_module(expanded, {:__aliases__, _, segments}, env) when is_atom(expanded) do
+  defp maybe_resolve_nested_module(expanded, {:__aliases__, _, segments}, env)
+       when is_atom(expanded) do
     nested = Module.concat(env.module, Module.concat(segments))
 
     case Code.ensure_compiled(nested) do

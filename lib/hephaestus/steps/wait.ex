@@ -25,6 +25,11 @@ defmodule Hephaestus.Steps.Wait do
     {:async}
   end
 
+  @doc """
+  Converts a duration config map into milliseconds.
+
+  Used by runners to determine how long to wait before resuming the workflow.
+  """
   @spec delay_ms(%{duration: integer(), unit: :second | :minute | :hour | :day}) :: integer()
   def delay_ms(%{duration: duration, unit: :second}), do: duration * 1_000
   def delay_ms(%{duration: duration, unit: :minute}), do: duration * 60_000

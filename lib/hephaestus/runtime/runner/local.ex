@@ -21,6 +21,17 @@ defmodule Hephaestus.Runtime.Runner.Local do
           task_supervisor: GenServer.server()
         }
 
+  @doc """
+  Starts and links a local runner GenServer for the given workflow instance.
+
+  ## Options
+
+    * `:instance` (required) — the `Hephaestus.Core.Instance` struct to execute.
+    * `:instance_id` — overrides the instance's own ID for registry lookup (defaults to `instance.id`).
+    * `:registry` — the `Registry` used for process name registration.
+    * `:storage` — a `{module, name}` tuple for the storage adapter.
+    * `:task_supervisor` — the `Task.Supervisor` used to run step executions concurrently.
+  """
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) do
     instance = Keyword.fetch!(opts, :instance)
@@ -44,6 +55,20 @@ defmodule Hephaestus.Runtime.Runner.Local do
     )
   end
 
+  @doc """
+  Creates a new workflow instance and spawns a local GenServer to execute it.
+
+  The instance is persisted to storage immediately, then a transient child is
+  started under the given `DynamicSupervisor`. The runner process registers
+  itself in the provided `Registry` so it can be located by instance ID.
+
+  ## Options
+
+    * `:storage` — a `{module, name}` tuple for the storage adapter.
+    * `:registry` — the `Registry` used for process name registration.
+    * `:dynamic_supervisor` — the `DynamicSupervisor` that will own the runner process.
+    * `:task_supervisor` — the `Task.Supervisor` used to run step executions concurrently.
+  """
   @impl Runner
   @spec start_instance(module(), map(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def start_instance(workflow, context, opts) when is_atom(workflow) and is_map(context) do
@@ -60,13 +85,15 @@ defmodule Hephaestus.Runtime.Runner.Local do
       id: {__MODULE__, instance.id},
       start:
         {__MODULE__, :start_link,
-         [[
-           instance: instance,
-           instance_id: instance.id,
-           registry: registry,
-           storage: storage,
-           task_supervisor: task_supervisor
-         ]]},
+         [
+           [
+             instance: instance,
+             instance_id: instance.id,
+             registry: registry,
+             storage: storage,
+             task_supervisor: task_supervisor
+           ]
+         ]},
       restart: :transient
     }
 
@@ -76,15 +103,30 @@ defmodule Hephaestus.Runtime.Runner.Local do
     end
   end
 
+  @doc """
+  Resumes a waiting instance by sending an asynchronous cast to its runner process.
+
+  The event is normalized to an atom and delivered via `GenServer.cast/2`, so the
+  call returns immediately. Returns `{:error, :instance_not_found}` if no runner
+  process is registered for the given `instance_id`.
+  """
   @impl Runner
   @spec resume(String.t(), atom() | String.t()) :: :ok | {:error, :instance_not_found}
-  def resume(instance_id, event) when is_binary(instance_id) and (is_binary(event) or is_atom(event)) do
+  def resume(instance_id, event)
+      when is_binary(instance_id) and (is_binary(event) or is_atom(event)) do
     with {:ok, pid} <- lookup_instance(instance_id) do
       GenServer.cast(pid, {:resume, normalize_event(event)})
       :ok
     end
   end
 
+  @doc """
+  Schedules a delayed `:timeout` resume for a specific step using `Process.send_after/3`.
+
+  Because the timer is process-local, it does **not** survive a runner crash.
+  Returns `{:ok, timer_ref}` on success, where `timer_ref` is the Erlang timer
+  reference that can be cancelled with `Process.cancel_timer/1`.
+  """
   @impl Runner
   @spec schedule_resume(String.t(), atom(), pos_integer()) ::
           {:ok, reference()} | {:error, :instance_not_found}
@@ -97,7 +139,10 @@ defmodule Hephaestus.Runtime.Runner.Local do
 
   @impl GenServer
   @spec init(state()) :: {:ok, state(), {:continue, :advance}} | {:stop, :normal}
-  def init(%{instance: instance, instance_id: instance_id, registry: registry, storage: storage} = state) do
+  def init(
+        %{instance: instance, instance_id: instance_id, registry: registry, storage: storage} =
+          state
+      ) do
     remember_registry(registry)
 
     recovered_instance = recover_instance(storage, instance_id, instance)
@@ -144,7 +189,10 @@ defmodule Hephaestus.Runtime.Runner.Local do
     end
   end
 
-  def handle_continue(:execute_active, %{instance: instance, task_supervisor: task_supervisor} = state) do
+  def handle_continue(
+        :execute_active,
+        %{instance: instance, task_supervisor: task_supervisor} = state
+      ) do
     results =
       instance.active_steps
       |> MapSet.to_list()
@@ -159,7 +207,10 @@ defmodule Hephaestus.Runtime.Runner.Local do
     next_instance =
       Enum.reduce_while(results, %{instance | status: :running, current_step: nil}, fn
         {step_ref, {:ok, event}}, acc ->
-          {:cont, acc |> Engine.complete_step(step_ref, event, %{}) |> Engine.activate_transitions(step_ref, event)}
+          {:cont,
+           acc
+           |> Engine.complete_step(step_ref, event, %{})
+           |> Engine.activate_transitions(step_ref, event)}
 
         {step_ref, {:ok, event, context_updates}}, acc ->
           {:cont,
