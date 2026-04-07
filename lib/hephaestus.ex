@@ -43,13 +43,30 @@ defmodule Hephaestus do
   @default_storage Hephaestus.Runtime.Storage.ETS
   @default_runner Hephaestus.Runtime.Runner.Local
 
-  defmacro __using__(opts) do
-    storage = Keyword.get(opts, :storage, @default_storage)
-    runner = Keyword.get(opts, :runner, @default_runner)
+  defp normalize_adapter({module, opts}) when is_list(opts), do: {module, opts}
+  defp normalize_adapter(module), do: {module, []}
 
-    quote bind_quoted: [storage: storage, runner: runner] do
-      @hephaestus_storage storage
-      @hephaestus_runner runner
+  defmacro __using__(opts) do
+    {storage_module, storage_opts} =
+      opts
+      |> Keyword.get(:storage, @default_storage)
+      |> normalize_adapter()
+
+    {runner_module, runner_opts} =
+      opts
+      |> Keyword.get(:runner, @default_runner)
+      |> normalize_adapter()
+
+    quote bind_quoted: [
+            storage_module: storage_module,
+            storage_opts: storage_opts,
+            runner_module: runner_module,
+            runner_opts: runner_opts
+          ] do
+      @hephaestus_storage_module storage_module
+      @hephaestus_storage_opts storage_opts
+      @hephaestus_runner_module runner_module
+      @hephaestus_runner_opts runner_opts
 
       @doc false
       def child_spec(init_arg) do
@@ -62,7 +79,8 @@ defmodule Hephaestus do
           {Registry, keys: :unique, name: registry},
           {DynamicSupervisor, name: dynamic_supervisor, strategy: :one_for_one},
           {Task.Supervisor, name: task_supervisor},
-          {@hephaestus_storage, name: storage_name}
+          {@hephaestus_storage_module,
+           Keyword.merge(@hephaestus_storage_opts, name: storage_name)}
         ]
 
         %{
@@ -78,23 +96,23 @@ defmodule Hephaestus do
       Starts a workflow instance through the configured runner.
       """
       def start_instance(workflow, context) when is_atom(workflow) and is_map(context) do
-        @hephaestus_runner.start_instance(workflow, context, runner_opts())
+        @hephaestus_runner_module.start_instance(workflow, context, runner_opts())
       end
 
       @doc """
       Resumes a waiting workflow instance through the configured runner.
       """
       def resume(instance_id, event) when is_binary(instance_id) and is_atom(event) do
-        @hephaestus_runner.resume(instance_id, event)
+        @hephaestus_runner_module.resume(instance_id, event)
       end
 
       defp runner_opts do
         [
-          storage: {@hephaestus_storage, Module.concat(__MODULE__, Storage)},
+          storage: {@hephaestus_storage_module, Module.concat(__MODULE__, Storage)},
           registry: Module.concat(__MODULE__, Registry),
           dynamic_supervisor: Module.concat(__MODULE__, DynamicSupervisor),
           task_supervisor: Module.concat(__MODULE__, TaskSupervisor)
-        ]
+        ] ++ @hephaestus_runner_opts
       end
     end
   end

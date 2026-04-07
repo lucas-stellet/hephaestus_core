@@ -81,4 +81,38 @@ defmodule Hephaestus.EntryModuleTest do
       assert MapSet.member?(instance.completed_steps, Hephaestus.Test.Parallel.Join)
     end
   end
+
+  describe "tuple config" do
+    test "accepts {module, opts} for storage" do
+      # Arrange
+      assert Code.ensure_loaded?(Hephaestus.Test.TupleConfigHephaestus)
+
+      # Act
+      exported = function_exported?(Hephaestus.Test.TupleConfigHephaestus, :child_spec, 1)
+
+      # Assert
+      assert exported == true
+    end
+
+    test "tuple config starts supervision tree" do
+      # Arrange
+
+      # Act
+      {:ok, pid} = start_supervised(Hephaestus.Test.TupleConfigHephaestus)
+
+      # Assert
+      assert is_pid(pid)
+      assert Process.whereis(Hephaestus.Test.TupleConfigHephaestus.Storage) != nil
+    end
+
+    test "bare module config still starts supervision tree", %{sup: pid} do
+      # Arrange
+
+      # Act
+
+      # Assert
+      assert is_pid(pid)
+      assert Process.whereis(TestHephaestus.Storage) != nil
+    end
+  end
 end
