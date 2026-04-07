@@ -33,24 +33,71 @@ defmodule Hephaestus.Steps.Step do
 
   alias Hephaestus.Core.{Context, Instance}
 
+  @typedoc "Optional configuration map passed to a step's `execute/3` callback, or `nil` if no config is set."
   @type config :: map() | nil
+  @typedoc "An atom representing the outcome of a step execution, used to determine the next transition in the workflow."
   @type event :: atom()
+  @typedoc "A map of key-value pairs to merge into the workflow context after a step completes."
   @type context_updates :: map()
+  @typedoc "Retry configuration controlling how the runner retries a failed step."
   @type retry_config :: %{
           max_attempts: pos_integer(),
           backoff: :exponential | :linear | :constant,
           max_backoff: pos_integer()
         }
+  @typedoc """
+  The return type of `execute/3`.
+
+  * `{:ok, event}` — step completed synchronously, emitting the named event.
+  * `{:ok, event, context_updates}` — completed with additional data to store in the workflow context.
+  * `{:async}` — step is asynchronous and will be resumed later (e.g., after a timer or external event).
+  * `{:error, reason}` — step failed with the given reason.
+  """
   @type result ::
           {:ok, event()}
           | {:ok, event(), context_updates()}
           | {:async}
           | {:error, term()}
 
+  @doc """
+  Returns the list of events this step can emit.
+
+  The workflow engine uses this list to validate that transitions defined in the
+  workflow graph match the events the step actually produces. Each event atom
+  should correspond to a possible outcome of `execute/3`.
+  """
   @callback events() :: [event()]
+
+  @doc """
+  Returns a custom atom key identifying this step.
+
+  Optional. When not implemented, the workflow engine derives the key from the
+  module name. Override this to provide a shorter or more meaningful identifier
+  for storage and logging.
+  """
   @callback step_key() :: atom()
+
+  @doc """
+  Returns the retry configuration for this step.
+
+  Optional. When implemented, the runner will automatically retry the step on
+  failure according to the returned configuration, which specifies the maximum
+  number of attempts, backoff strategy (`:exponential`, `:linear`, or
+  `:constant`), and maximum backoff interval in milliseconds.
+  """
   @callback retry_config() :: retry_config()
-  @callback execute(instance :: Instance.t(), config :: config(), context :: Context.t()) :: result()
+
+  @doc """
+  Executes the step logic.
+
+  Receives the current workflow `instance`, an optional `config` map defined in
+  the workflow graph for this step, and the execution `context` containing
+  initial data and results from previous steps.
+
+  Must return a `t:result/0` tuple indicating the outcome.
+  """
+  @callback execute(instance :: Instance.t(), config :: config(), context :: Context.t()) ::
+              result()
 
   @optional_callbacks [step_key: 0, retry_config: 0]
 end
