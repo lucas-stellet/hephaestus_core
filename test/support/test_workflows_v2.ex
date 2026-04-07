@@ -71,6 +71,19 @@ defmodule Hephaestus.Test.V2.EventWorkflow do
   def transit(Hephaestus.Test.V2.StepB, :done, _ctx), do: Hephaestus.Steps.Done
 end
 
+defmodule Hephaestus.Test.V2.TaggedWorkflow do
+  use Hephaestus.Workflow,
+    tags: ["onboarding", "growth"],
+    metadata: %{"team" => "growth", "priority" => "high"}
+
+  @impl true
+  def start, do: Hephaestus.Test.V2.StepA
+
+  @impl true
+  def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: Hephaestus.Test.V2.StepB
+  def transit(Hephaestus.Test.V2.StepB, :done, _ctx), do: Hephaestus.Steps.Done
+end
+
 defmodule Hephaestus.Test.V2.DynamicWorkflow do
   use Hephaestus.Workflow
 

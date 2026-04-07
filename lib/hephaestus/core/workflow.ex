@@ -283,9 +283,24 @@ defmodule Hephaestus.Workflow do
   at compile time, validates it with `libgraph`, cross-checks `events/0`
   declarations, and generates helper functions for runtime coordination.
 
+  ## Options
+
+    * `:tags` — a list of strings used as labels for observability and filtering
+      (default: `[]`). Runner adapters can use these to tag jobs or events.
+
+    * `:metadata` — a map with string keys and JSON-safe values (strings, numbers,
+      booleans, nil, or nested maps/lists) for custom observability data (default: `%{}`).
+      Atom keys are rejected because they lose identity after JSON round-tripping in
+      adapters like Oban.
+
   ## Generated Functions
 
   When you `use Hephaestus.Workflow`, the following functions are generated in your module:
+
+    * `__tags__/0` — returns the list of tags declared via the `:tags` option (default: `[]`).
+
+    * `__metadata__/0` — returns the metadata map declared via the `:metadata` option
+      (default: `%{}`).
 
     * `__predecessors__/1` — returns the set of immediate predecessor steps for a given
       step module as a `MapSet`. Used by `Hephaestus.Core.Engine` to implement join
@@ -305,13 +320,16 @@ defmodule Hephaestus.Workflow do
   @dynamic_edges_attr :hephaestus_dynamic_edges
 
   @doc false
-  defmacro __using__(_opts) do
-    quote do
+  defmacro __using__(opts) do
+    quote bind_quoted: [opts: opts] do
       @behaviour Hephaestus.Core.Workflow
-      Module.register_attribute(__MODULE__, unquote(@dynamic_edges_attr), accumulate: true)
+      Module.register_attribute(__MODULE__, :hephaestus_dynamic_edges, accumulate: true)
       Module.register_attribute(__MODULE__, :targets, persist: false)
       @on_definition Hephaestus.Workflow
       @before_compile Hephaestus.Workflow
+
+      @hephaestus_tags Keyword.get(opts, :tags, [])
+      @hephaestus_metadata Keyword.get(opts, :metadata, %{})
     end
   end
 
@@ -343,6 +361,12 @@ defmodule Hephaestus.Workflow do
 
   @doc false
   defmacro __before_compile__(env) do
+    tags = Module.get_attribute(env.module, :hephaestus_tags)
+    metadata = Module.get_attribute(env.module, :hephaestus_metadata)
+
+    validate_tags!(tags)
+    validate_metadata!(metadata)
+
     start = extract_start!(env)
 
     edges =
@@ -355,8 +379,13 @@ defmodule Hephaestus.Workflow do
     graph_ast = Macro.escape(graph)
     predecessors_ast = Macro.escape(predecessors)
     edges_ast = Macro.escape(edges)
+    metadata_ast = Macro.escape(metadata)
 
     quote do
+      @doc false
+      def __tags__, do: unquote(tags)
+      @doc false
+      def __metadata__, do: unquote(metadata_ast)
       def __predecessors__(module), do: Map.get(unquote(predecessors_ast), module, MapSet.new())
       def __graph__, do: unquote(graph_ast)
       def __edges__, do: unquote(edges_ast)
@@ -494,4 +523,45 @@ defmodule Hephaestus.Workflow do
   end
 
   defp maybe_resolve_nested_module(expanded, _ast, _env), do: expanded
+
+  # -- Tags & metadata validation (runs at macro expansion time) --
+
+  defp validate_tags!(tags) do
+    unless is_list(tags) and Enum.all?(tags, &is_binary/1) do
+      raise CompileError,
+        description: "expected :tags to be a list of strings, got: #{inspect(tags)}"
+    end
+  end
+
+  defp validate_metadata!(metadata) do
+    unless is_map(metadata) do
+      raise CompileError,
+        description: "expected :metadata to be a map, got: #{inspect(metadata)}"
+    end
+
+    unless Enum.all?(metadata, fn {k, _v} -> is_binary(k) end) do
+      raise CompileError,
+        description:
+          "expected :metadata keys to be strings (atom keys would lose identity " <>
+            "after JSON round-tripping in adapters like Oban), got: #{inspect(metadata)}"
+    end
+
+    unless json_safe_values?(metadata) do
+      raise CompileError,
+        description:
+          "expected :metadata values to be JSON-safe (strings, numbers, booleans, " <>
+            "or nested maps/lists of the same), got: #{inspect(metadata)}"
+    end
+  end
+
+  defp json_safe_values?(map) when is_map(map),
+    do: Enum.all?(map, fn {_k, v} -> json_safe_value?(v) end)
+
+  defp json_safe_value?(v) when is_binary(v), do: true
+  defp json_safe_value?(v) when is_number(v), do: true
+  defp json_safe_value?(v) when is_boolean(v), do: true
+  defp json_safe_value?(v) when is_nil(v), do: true
+  defp json_safe_value?(v) when is_list(v), do: Enum.all?(v, &json_safe_value?/1)
+  defp json_safe_value?(v) when is_map(v), do: json_safe_values?(v)
+  defp json_safe_value?(_), do: false
 end
