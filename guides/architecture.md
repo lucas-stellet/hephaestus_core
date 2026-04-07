@@ -151,10 +151,12 @@ At compile time, the macro:
 1. Extracts `start/0` to find the entry point.
 2. Walks all `transit/3` clauses to build an edge list (static clauses are
    extracted from the AST; dynamic clauses use `@targets` annotations).
-3. Calls `Hephaestus.Core.Workflow.validate!/4` which builds a `libgraph`
+3. Reads `:tags` and `:metadata` options (if provided), validates them (string
+   keys, JSON-safe values), stores as module attributes.
+4. Calls `Hephaestus.Core.Workflow.validate!/4` which builds a `libgraph`
    digraph and runs six validations.
-4. Generates `__predecessors__/1`, `__graph__/0`, and `__edges__/0` into the
-   workflow module for runtime use.
+5. Generates `__tags__/0`, `__metadata__/0`, `__predecessors__/1`, `__graph__/0`,
+   and `__edges__/0` into the workflow module for runtime use.
 
 ### ExecutionEntry (`Hephaestus.Core.ExecutionEntry`)
 
@@ -390,16 +392,19 @@ Each workflow instance is a transient child under the `DynamicSupervisor`,
 registered by instance ID in the `Registry`. The `TaskSupervisor` runs
 concurrent step executions.
 
-## Future: Ecto and Oban adapters
+## Extension adapters
 
-The adapter pattern exists specifically to support production-grade alternatives:
+The adapter pattern enables production-grade alternatives that plug into the
+same contracts:
 
 - **`hephaestus_ecto`** — a `Storage` adapter that persists instances as JSONB
   in PostgreSQL via Ecto. Enables durable workflows that survive node restarts.
 - **`hephaestus_oban`** — a `Runner` adapter that uses Oban workers instead of
   GenServer processes. Brings distributed execution, persistent job queues,
-  and advisory-lock-based concurrency control.
+  and advisory-lock-based concurrency control. Uses workflow `__tags__/0` and
+  `__metadata__/0` to populate Oban job meta and tags for filtering in Oban Web.
 
-These packages will implement the same `Storage` and `Runner` behaviours. No
+These packages implement the same `Storage` and `Runner` behaviours. No
 changes to your workflow definitions or step implementations — swap the adapter
-in `use Hephaestus` and the runtime changes underneath.
+in `use Hephaestus` and the runtime changes underneath. See the
+[Extensions guide](extensions.md) for setup details.

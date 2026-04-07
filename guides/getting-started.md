@@ -14,7 +14,7 @@ Add `hephaestus` to your `mix.exs` dependencies:
 ```elixir
 def deps do
   [
-    {:hephaestus, "~> 0.1.1"}
+    {:hephaestus, "~> 0.1.3"}
   ]
 end
 ```
@@ -76,6 +76,25 @@ end
 ```
 
 Every path must end at `Hephaestus.Steps.Done`. The workflow DAG is validated at compile time — cycles, unreachable steps, and missing transitions all raise `CompileError`.
+
+### Tags and metadata (optional)
+
+Workflows can declare tags and metadata for observability. Runner adapters (like `hephaestus_oban`) use these to tag jobs for filtering and grouping:
+
+```elixir
+defmodule MyApp.Workflows.OrderFlow do
+  use Hephaestus.Workflow,
+    tags: ["orders", "checkout"],
+    metadata: %{"team" => "payments", "priority" => "high"}
+
+  # ... start/0 and transit/3 as before
+end
+```
+
+- `:tags` — list of strings (default: `[]`)
+- `:metadata` — map with string keys and JSON-safe values (default: `%{}`)
+
+Both are accessible at runtime via `MyApp.Workflows.OrderFlow.__tags__()` and `MyApp.Workflows.OrderFlow.__metadata__()`. Invalid inputs (atom keys, non-JSON-safe values) raise `CompileError`.
 
 ## Step 4: Set up the supervision tree
 

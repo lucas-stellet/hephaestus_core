@@ -53,7 +53,7 @@ Add to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:hephaestus, "~> 0.1.1"},
+    {:hephaestus, "~> 0.1.3"},
     {:hephaestus_ecto, "~> 0.1.0"}
   ]
 end
@@ -134,6 +134,10 @@ Ecto storage adapter.
   telemetry listener marks the workflow as `:failed` and cancels remaining jobs.
 - **Durable timers** — `schedule_resume/3` creates an Oban job that survives VM
   restarts, unlike the local runner's process-local timers.
+- **Job observability** — automatically populates Oban job `meta` and `tags`
+  from the workflow's `__tags__/0` and `__metadata__/0` (declared via
+  `use Hephaestus.Workflow, tags: [...], metadata: %{...}`). Enables filtering
+  in Oban Web by workflow type, instance ID, step name, or custom labels.
 - **Retry configuration** — resolves with most-specific-wins priority:
   1. `Step.retry_config/0` (per-step override)
   2. `Workflow.default_retry_config/0` (per-workflow default)
@@ -153,7 +157,7 @@ Add to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:hephaestus, "~> 0.1.1"},
+    {:hephaestus, "~> 0.1.3"},
     {:hephaestus_ecto, "~> 0.1.0"},
     {:hephaestus_oban, "~> 0.1.0"}
   ]
@@ -240,7 +244,7 @@ through metrics dashboards, structured logging, and alerting.
 ```elixir
 def deps do
   [
-    {:hephaestus, "~> 0.1.1"},
+    {:hephaestus, "~> 0.1.3"},
     {:hephaestus_telemetry, "~> 0.1.0"}
   ]
 end
@@ -273,7 +277,7 @@ complete setup:
 # mix.exs
 def deps do
   [
-    {:hephaestus, "~> 0.1.1"},
+    {:hephaestus, "~> 0.1.3"},
     {:hephaestus_ecto, "~> 0.1.0"},
     {:hephaestus_oban, "~> 0.1.0"},
     {:hephaestus_telemetry, "~> 0.1.0"}
