@@ -34,8 +34,10 @@ defmodule Hephaestus.Core.Instance do
     execution_history: []
   ]
 
+  @typedoc "The lifecycle status of a workflow instance."
   @type status :: :pending | :running | :waiting | :completed | :failed
 
+  @typedoc "A workflow instance struct tracking execution state, active/completed steps, and context."
   @type t :: %__MODULE__{
           id: String.t(),
           workflow: module(),
@@ -48,6 +50,17 @@ defmodule Hephaestus.Core.Instance do
           execution_history: list()
         }
 
+  @doc """
+  Creates a new workflow instance for the given workflow module.
+
+  Generates a UUID v4 identifier and initializes the instance with a `:pending`
+  status and the provided initial context.
+
+  ## Parameters
+
+    * `workflow` - the workflow module to execute
+    * `context` - a map of initial data passed to the workflow (default: `%{}`)
+  """
   @spec new(module(), map()) :: t()
   def new(workflow, context \\ %{}) when is_atom(workflow) and is_map(context) do
     %__MODULE__{

@@ -5,6 +5,23 @@ defmodule Hephaestus.Core.Engine do
 
   alias Hephaestus.Core.{Context, Instance}
 
+  @doc """
+  Advances a workflow instance to its next state.
+
+  If the instance is `:pending`, it is started by activating the workflow's
+  initial step. If the instance is `:waiting` or has active steps still
+  running, it is returned unchanged. Otherwise, completion is checked and the
+  instance may transition to `:completed`.
+
+  ## Parameters
+
+    * `instance` - a `Hephaestus.Core.Instance` struct
+
+  ## Returns
+
+    * `{:ok, instance}` - the (possibly updated) instance
+    * `{:error, reason}` - if advancing fails
+  """
   @spec advance(Instance.t()) :: {:ok, Instance.t()} | {:error, term()}
   def advance(%Instance{} = instance) do
     instance = ensure_started(instance)
@@ -21,6 +38,25 @@ defmodule Hephaestus.Core.Engine do
     end
   end
 
+  @doc """
+  Executes a step module's `c:Hephaestus.Step.execute/3` callback.
+
+  Looks up the step's configuration from the instance and delegates to
+  `step_module.execute/3`, passing the instance, its config, and the current
+  context.
+
+  ## Parameters
+
+    * `instance` - a `Hephaestus.Core.Instance` struct
+    * `step_module` - the step module to execute (must implement `execute/3`)
+
+  ## Returns
+
+    * `{:ok, event}` - step completed synchronously with the given event atom
+    * `{:ok, event, context_updates}` - step completed with context updates
+    * `{:async}` - step will complete asynchronously (instance enters `:waiting`)
+    * `{:error, reason}` - step execution failed
+  """
   @spec execute_step(Instance.t(), module()) ::
           {:ok, atom()} | {:ok, atom(), map()} | {:async} | {:error, term()}
   def execute_step(%Instance{} = instance, step_module) when is_atom(step_module) do
@@ -34,6 +70,25 @@ defmodule Hephaestus.Core.Engine do
     step_module.execute(instance, config, instance.context)
   end
 
+  @doc """
+  Marks a step as completed and stores its context updates.
+
+  Moves `step_module` from the active set to the completed set, merges
+  `context_updates` into the instance context under the step's context key,
+  and removes the step's runtime configuration.
+
+  ## Parameters
+
+    * `instance` - a `Hephaestus.Core.Instance` struct
+    * `step_module` - the step module that finished
+    * `event` - the completion event atom (unused internally, passed through
+      for consistency)
+    * `context_updates` - a map of results to store in the instance context
+
+  ## Returns
+
+  The updated `Hephaestus.Core.Instance` struct.
+  """
   @spec complete_step(Instance.t(), module(), atom(), map()) :: Instance.t()
   def complete_step(%Instance{} = instance, step_module, _event, context_updates)
       when is_atom(step_module) and is_map(context_updates) do
@@ -48,6 +103,23 @@ defmodule Hephaestus.Core.Engine do
     }
   end
 
+  @doc """
+  Resumes a waiting workflow instance after an asynchronous step completes.
+
+  Completes the given step, activates any outgoing transitions for `event`,
+  and sets the instance status back to `:running`. If the instance is not in
+  the `:waiting` status, it is returned unchanged.
+
+  ## Parameters
+
+    * `instance` - a `Hephaestus.Core.Instance` struct (must be `:waiting`)
+    * `step_module` - the step module that produced the resume event
+    * `event` - the event atom that triggered the resume
+
+  ## Returns
+
+  The updated `Hephaestus.Core.Instance` struct.
+  """
   @spec resume_step(Instance.t(), module(), atom()) :: Instance.t()
   def resume_step(%Instance{status: :waiting} = instance, step_module, event)
       when is_atom(step_module) and is_atom(event) do
@@ -75,6 +147,21 @@ defmodule Hephaestus.Core.Engine do
 
   defp ensure_started(%Instance{} = instance), do: instance
 
+  @doc """
+  Checks whether the workflow instance has completed.
+
+  If there are no active steps and the instance is not `:waiting`, the status
+  is set to `:completed` and `current_step` is cleared. Otherwise, the
+  instance is returned unchanged.
+
+  ## Parameters
+
+    * `instance` - a `Hephaestus.Core.Instance` struct
+
+  ## Returns
+
+  The (possibly updated) `Hephaestus.Core.Instance` struct.
+  """
   @spec check_completion(Instance.t()) :: Instance.t()
   def check_completion(%Instance{active_steps: active_steps} = instance) do
     if MapSet.size(active_steps) == 0 and instance.status != :waiting do
@@ -84,6 +171,26 @@ defmodule Hephaestus.Core.Engine do
     end
   end
 
+  @doc """
+  Resolves and activates outgoing transitions from a completed step.
+
+  Calls the workflow's `transit/3` callback to determine the next step(s)
+  for the given `from_module` and `event`. Each target step is activated only
+  if all of its predecessors have already completed (join semantics).
+
+  Supports single targets, `{target, config}` tuples, and lists of targets
+  for parallel fan-out.
+
+  ## Parameters
+
+    * `instance` - a `Hephaestus.Core.Instance` struct
+    * `from_module` - the step module that just completed
+    * `event` - the event atom returned by the completed step
+
+  ## Returns
+
+  The updated `Hephaestus.Core.Instance` struct with newly activated steps.
+  """
   @spec activate_transitions(Instance.t(), module(), atom()) :: Instance.t()
   def activate_transitions(%Instance{} = instance, from_module, event)
       when is_atom(from_module) and is_atom(event) do
@@ -118,7 +225,8 @@ defmodule Hephaestus.Core.Engine do
     end
   end
 
-  defp maybe_activate_step(%Instance{} = instance, step_module, config) when is_atom(step_module) do
+  defp maybe_activate_step(%Instance{} = instance, step_module, config)
+       when is_atom(step_module) do
     predecessors = instance.workflow.__predecessors__(step_module)
 
     if MapSet.subset?(predecessors, instance.completed_steps) do
