@@ -36,6 +36,11 @@ defmodule Hephaestus.Steps.Step do
   @type config :: map() | nil
   @type event :: atom()
   @type context_updates :: map()
+  @type retry_config :: %{
+          max_attempts: pos_integer(),
+          backoff: :exponential | :linear | :constant,
+          max_backoff: pos_integer()
+        }
   @type result ::
           {:ok, event()}
           | {:ok, event(), context_updates()}
@@ -44,7 +49,8 @@ defmodule Hephaestus.Steps.Step do
 
   @callback events() :: [event()]
   @callback step_key() :: atom()
+  @callback retry_config() :: retry_config()
   @callback execute(instance :: Instance.t(), config :: config(), context :: Context.t()) :: result()
 
-  @optional_callbacks [step_key: 0]
+  @optional_callbacks [step_key: 0, retry_config: 0]
 end
