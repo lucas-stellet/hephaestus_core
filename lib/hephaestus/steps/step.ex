@@ -65,6 +65,16 @@ defmodule Hephaestus.Steps.Step do
   The workflow engine uses this list to validate that transitions defined in the
   workflow graph match the events the step actually produces. Each event atom
   should correspond to a possible outcome of `execute/3`.
+
+  ## Examples
+
+      @impl true
+      def events, do: [:done]
+
+  A step with multiple outcomes:
+
+      @impl true
+      def events, do: [:approved, :rejected]
   """
   @callback events() :: [event()]
 
@@ -74,6 +84,11 @@ defmodule Hephaestus.Steps.Step do
   Optional. When not implemented, the workflow engine derives the key from the
   module name. Override this to provide a shorter or more meaningful identifier
   for storage and logging.
+
+  ## Examples
+
+      @impl true
+      def step_key, do: :validate
   """
   @callback step_key() :: atom()
 
@@ -84,6 +99,13 @@ defmodule Hephaestus.Steps.Step do
   failure according to the returned configuration, which specifies the maximum
   number of attempts, backoff strategy (`:exponential`, `:linear`, or
   `:constant`), and maximum backoff interval in milliseconds.
+
+  ## Examples
+
+      @impl true
+      def retry_config do
+        %{max_attempts: 3, backoff: :exponential, max_backoff: 30_000}
+      end
   """
   @callback retry_config() :: retry_config()
 
@@ -95,6 +117,26 @@ defmodule Hephaestus.Steps.Step do
   initial data and results from previous steps.
 
   Must return a `t:result/0` tuple indicating the outcome.
+
+  ## Examples
+
+  Synchronous step returning an event:
+
+      @impl true
+      def execute(_instance, _config, _context), do: {:ok, :done}
+
+  Step that reads context and returns updates:
+
+      @impl true
+      def execute(_instance, _config, context) do
+        items = context.initial.items
+        {:ok, :done, %{item_count: length(items)}}
+      end
+
+  Asynchronous step (waits for external resume):
+
+      @impl true
+      def execute(_instance, _config, _context), do: {:async}
   """
   @callback execute(instance :: Instance.t(), config :: config(), context :: Context.t()) ::
               result()

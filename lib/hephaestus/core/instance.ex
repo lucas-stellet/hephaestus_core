@@ -60,6 +60,20 @@ defmodule Hephaestus.Core.Instance do
 
     * `workflow` - the workflow module to execute
     * `context` - a map of initial data passed to the workflow (default: `%{}`)
+
+  ## Examples
+
+      iex> instance = Instance.new(MyApp.Workflows.OrderFlow, %{order_id: 123})
+      iex> instance.status
+      :pending
+      iex> instance.context.initial
+      %{order_id: 123}
+
+  With default empty context:
+
+      iex> instance = Instance.new(MyApp.Workflows.OrderFlow)
+      iex> instance.context.initial
+      %{}
   """
   @spec new(module(), map()) :: t()
   def new(workflow, context \\ %{}) when is_atom(workflow) and is_map(context) do

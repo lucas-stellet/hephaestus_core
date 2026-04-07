@@ -281,8 +281,25 @@ defmodule Hephaestus.Workflow do
   with `_ctx`. Dynamic clauses use `@targets` before the clause to declare
   possible destinations for DAG validation. The macro extracts the step DAG
   at compile time, validates it with `libgraph`, cross-checks `events/0`
-  declarations, and generates `__predecessors__/1` and `__graph__/0` helpers
-  for runtime coordination.
+  declarations, and generates helper functions for runtime coordination.
+
+  ## Generated Functions
+
+  When you `use Hephaestus.Workflow`, the following functions are generated in your module:
+
+    * `__predecessors__/1` — returns the set of immediate predecessor steps for a given
+      step module as a `MapSet`. Used by `Hephaestus.Core.Engine` to implement join
+      semantics: a step is only activated when all of its predecessors have completed.
+      Returns an empty `MapSet` for the start step or unknown modules.
+
+    * `__graph__/0` — returns the complete workflow DAG as a `Graph` struct (from the
+      `libgraph` library). Useful for introspection and tooling such as
+      `mix hephaestus.gen.docs`.
+
+    * `__edges__/0` — returns the raw list of edge maps extracted at compile time. Each
+      edge is a map with `:from`, `:event`, `:targets`, and `:dynamic?` keys. Used by
+      tooling (e.g., `mix hephaestus.gen.docs`) to render event-annotated workflow
+      diagrams.
   """
 
   @dynamic_edges_attr :hephaestus_dynamic_edges

@@ -21,6 +21,19 @@ defmodule Hephaestus.Core.Engine do
 
     * `{:ok, instance}` - the (possibly updated) instance
     * `{:error, reason}` - if advancing fails
+
+  ## Examples
+
+      iex> instance = Instance.new(MyApp.Workflows.OrderFlow, %{order_id: 123})
+      iex> {:ok, advanced} = Engine.advance(instance)
+      iex> advanced.status
+      :running
+      iex> MapSet.member?(advanced.active_steps, MyApp.Steps.ValidateOrder)
+      true
+
+  A `:waiting` instance is returned unchanged:
+
+      iex> {:ok, ^waiting_instance} = Engine.advance(waiting_instance)
   """
   @spec advance(Instance.t()) :: {:ok, Instance.t()} | {:error, term()}
   def advance(%Instance{} = instance) do
@@ -56,6 +69,19 @@ defmodule Hephaestus.Core.Engine do
     * `{:ok, event, context_updates}` - step completed with context updates
     * `{:async}` - step will complete asynchronously (instance enters `:waiting`)
     * `{:error, reason}` - step execution failed
+
+  ## Examples
+
+      iex> {:ok, instance} = Engine.advance(instance)
+      iex> {:ok, :done} = Engine.execute_step(instance, MyApp.Steps.ValidateOrder)
+
+  A step may return context updates along with the event:
+
+      iex> {:ok, :done, %{item_count: 3}} = Engine.execute_step(instance, MyApp.Steps.ProcessOrder)
+
+  Asynchronous steps return `{:async}`:
+
+      iex> {:async} = Engine.execute_step(instance, MyApp.Steps.WaitForPayment)
   """
   @spec execute_step(Instance.t(), module()) ::
           {:ok, atom()} | {:ok, atom(), map()} | {:async} | {:error, term()}
@@ -88,6 +114,14 @@ defmodule Hephaestus.Core.Engine do
   ## Returns
 
   The updated `Hephaestus.Core.Instance` struct.
+
+  ## Examples
+
+      iex> instance = Engine.complete_step(instance, MyApp.Steps.ValidateOrder, :done, %{item_count: 3})
+      iex> MapSet.member?(instance.completed_steps, MyApp.Steps.ValidateOrder)
+      true
+      iex> instance.context.steps.validate_order.item_count
+      3
   """
   @spec complete_step(Instance.t(), module(), atom(), map()) :: Instance.t()
   def complete_step(%Instance{} = instance, step_module, _event, context_updates)
@@ -119,6 +153,18 @@ defmodule Hephaestus.Core.Engine do
   ## Returns
 
   The updated `Hephaestus.Core.Instance` struct.
+
+  ## Examples
+
+      iex> instance = Engine.resume_step(waiting_instance, MyApp.Steps.WaitForPayment, :payment_confirmed)
+      iex> instance.status
+      :running
+
+  If the instance is not `:waiting`, it is returned unchanged:
+
+      iex> running_instance = Engine.resume_step(running_instance, MyApp.Steps.SomeStep, :done)
+      iex> running_instance.status
+      :running
   """
   @spec resume_step(Instance.t(), module(), atom()) :: Instance.t()
   def resume_step(%Instance{status: :waiting} = instance, step_module, event)

@@ -94,6 +94,10 @@ defmodule Hephaestus do
 
       @doc """
       Starts a workflow instance through the configured runner.
+
+      ## Examples
+
+          {:ok, instance_id} = MyApp.Hephaestus.start_instance(MyApp.Workflows.OrderFlow, %{order_id: 123})
       """
       def start_instance(workflow, context) when is_atom(workflow) and is_map(context) do
         @hephaestus_runner_module.start_instance(workflow, context, runner_opts())
@@ -101,6 +105,10 @@ defmodule Hephaestus do
 
       @doc """
       Resumes a waiting workflow instance through the configured runner.
+
+      ## Examples
+
+          :ok = MyApp.Hephaestus.resume(instance_id, :payment_confirmed)
       """
       def resume(instance_id, event) when is_binary(instance_id) and is_atom(event) do
         @hephaestus_runner_module.resume(instance_id, event)
