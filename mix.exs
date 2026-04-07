@@ -42,7 +42,42 @@ defmodule Hephaestus.MixProject do
     [
       main: "Hephaestus",
       source_ref: "v#{@version}",
-      source_url: @source_url
+      source_url: @source_url,
+      extras: [
+        "guides/getting-started.md",
+        "guides/architecture.md",
+        "guides/extensions.md"
+      ],
+      groups_for_extras: [
+        Guides: ~r/guides\/.*/
+      ],
+      groups_for_modules: [
+        Core: [
+          Hephaestus,
+          Hephaestus.Core.Engine,
+          Hephaestus.Core.Instance,
+          Hephaestus.Core.Context,
+          Hephaestus.Core.Workflow,
+          Hephaestus.Workflow,
+          Hephaestus.Core.ExecutionEntry
+        ],
+        Steps: [
+          Hephaestus.Steps.Step,
+          Hephaestus.Steps.Done,
+          Hephaestus.Steps.Wait,
+          Hephaestus.Steps.WaitForEvent,
+          Hephaestus.Steps.Debug
+        ],
+        Runtime: [
+          Hephaestus.Runtime.Runner,
+          Hephaestus.Runtime.Runner.Local,
+          Hephaestus.Runtime.Storage,
+          Hephaestus.Runtime.Storage.ETS
+        ],
+        Connectors: [
+          Hephaestus.Connectors.Connector
+        ]
+      ]
     ]
   end
 
