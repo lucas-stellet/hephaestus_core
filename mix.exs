@@ -47,7 +47,8 @@ defmodule Hephaestus.MixProject do
         "CHANGELOG.md",
         "guides/getting-started.md",
         "guides/architecture.md",
-        "guides/extensions.md"
+        "guides/extensions.md",
+        "guides/telemetry.md"
       ],
       groups_for_extras: [
         Guides: ~r/guides\/.*/
@@ -75,6 +76,11 @@ defmodule Hephaestus.MixProject do
           Hephaestus.Runtime.Storage,
           Hephaestus.Runtime.Storage.ETS
         ],
+        Telemetry: [
+          Hephaestus.Telemetry,
+          Hephaestus.Telemetry.LogHandler,
+          Hephaestus.Telemetry.Metrics
+        ],
         Connectors: [
           Hephaestus.Connectors.Connector
         ]
@@ -86,6 +92,8 @@ defmodule Hephaestus.MixProject do
   defp deps do
     [
       {:libgraph, "~> 0.16"},
+      {:telemetry, "~> 1.0"},
+      {:telemetry_metrics, "~> 1.0"},
       {:ex_doc, "~> 0.35", only: :dev, runtime: false}
     ]
   end

@@ -27,11 +27,13 @@ defmodule Hephaestus do
   The generated module exposes:
 
     * `start_instance/2` - starts a workflow instance
+    * `start_instance/3` - starts a workflow instance with options (e.g. telemetry metadata)
     * `resume/2` - resumes a waiting workflow instance
 
   ## Example
 
       {:ok, id} = MyApp.Hephaestus.start_instance(MyApp.Workflows.OrderFlow, %{order_id: 123})
+      {:ok, id} = MyApp.Hephaestus.start_instance(MyApp.Workflows.OrderFlow, %{order_id: 123}, telemetry_metadata: %{request_id: "req-123"})
       :ok = MyApp.Hephaestus.resume(id, :payment_confirmed)
 
   ## Options
@@ -83,24 +85,59 @@ defmodule Hephaestus do
            Keyword.merge(@hephaestus_storage_opts, name: storage_name)}
         ]
 
+        hephaestus_name = __MODULE__
+        hephaestus_runner = @hephaestus_runner_module
+        hephaestus_storage = @hephaestus_storage_module
+
         %{
           id: __MODULE__,
           start:
-            {Supervisor, :start_link,
-             [children, [name: __MODULE__, strategy: :one_for_one] ++ List.wrap(init_arg)]},
+            {__MODULE__, :start_link_with_telemetry,
+             [
+               children,
+               [name: __MODULE__, strategy: :one_for_one] ++ List.wrap(init_arg),
+               %{name: hephaestus_name, runner: hephaestus_runner, storage: hephaestus_storage}
+             ]},
           type: :supervisor
         }
+      end
+
+      @doc false
+      def start_link_with_telemetry(children, opts, telemetry_info) do
+        result = Supervisor.start_link(children, opts)
+
+        case result do
+          {:ok, pid} ->
+            Hephaestus.Telemetry.runner_init(Map.put(telemetry_info, :pid, pid))
+            {:ok, pid}
+
+          other ->
+            other
+        end
       end
 
       @doc """
       Starts a workflow instance through the configured runner.
 
+      ## Options
+
+        * `:telemetry_metadata` - a map of custom metadata to attach to all
+          telemetry events emitted for this instance (default: `%{}`)
+
       ## Examples
 
           {:ok, instance_id} = MyApp.Hephaestus.start_instance(MyApp.Workflows.OrderFlow, %{order_id: 123})
+          {:ok, instance_id} = MyApp.Hephaestus.start_instance(MyApp.Workflows.OrderFlow, %{order_id: 123}, telemetry_metadata: %{request_id: "req-456"})
       """
-      def start_instance(workflow, context) when is_atom(workflow) and is_map(context) do
-        @hephaestus_runner_module.start_instance(workflow, context, runner_opts())
+      def start_instance(workflow, context, opts \\ [])
+          when is_atom(workflow) and is_map(context) do
+        telemetry_metadata = Keyword.get(opts, :telemetry_metadata, %{})
+
+        @hephaestus_runner_module.start_instance(
+          workflow,
+          context,
+          Keyword.merge(runner_opts(), telemetry_metadata: telemetry_metadata)
+        )
       end
 
       @doc """

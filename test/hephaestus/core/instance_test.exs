@@ -37,4 +37,25 @@ defmodule Hephaestus.Core.InstanceTest do
       assert %Context{initial: %{}, steps: %{}} = instance.context
     end
   end
+
+  describe "telemetry fields" do
+    test "new/2 creates instance with default telemetry_metadata as empty map" do
+      instance = Instance.new(MyTestWorkflow, %{order_id: 1})
+
+      assert Map.get(instance, :telemetry_metadata) == %{}
+    end
+
+    test "new/2 creates instance with default telemetry_start_time as nil" do
+      instance = Instance.new(MyTestWorkflow, %{})
+
+      assert Map.get(instance, :telemetry_start_time) == nil
+    end
+
+    test "telemetry_metadata can be set after creation" do
+      instance = Instance.new(MyTestWorkflow, %{})
+      updated = Map.put(instance, :telemetry_metadata, %{request_id: "abc-123"})
+
+      assert Map.get(updated, :telemetry_metadata) == %{request_id: "abc-123"}
+    end
+  end
 end

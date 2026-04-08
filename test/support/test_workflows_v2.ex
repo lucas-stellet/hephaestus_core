@@ -84,6 +84,16 @@ defmodule Hephaestus.Test.V2.TaggedWorkflow do
   def transit(Hephaestus.Test.V2.StepB, :done, _ctx), do: Hephaestus.Steps.Done
 end
 
+defmodule Hephaestus.Test.V2.FailingWorkflow do
+  use Hephaestus.Workflow
+
+  @impl true
+  def start, do: Hephaestus.Test.V2.FailStep
+
+  @impl true
+  def transit(Hephaestus.Test.V2.FailStep, :done, _ctx), do: Hephaestus.Steps.Done
+end
+
 defmodule Hephaestus.Test.V2.DynamicWorkflow do
   use Hephaestus.Workflow
 

@@ -10,6 +10,7 @@ defmodule Hephaestus.Runtime.Runner.Local do
 
   alias Hephaestus.Core.{Engine, Instance}
   alias Hephaestus.Runtime.Runner
+  alias Hephaestus.Telemetry
 
   @behaviour Runner
   @registry_key {__MODULE__, :registry}
@@ -18,7 +19,10 @@ defmodule Hephaestus.Runtime.Runner.Local do
           instance: Instance.t(),
           registry: term(),
           storage: {module(), term()},
-          task_supervisor: GenServer.server()
+          task_supervisor: GenServer.server(),
+          advance_count: non_neg_integer(),
+          step_count: non_neg_integer(),
+          waiting_since: integer() | nil
         }
 
   @doc """
@@ -76,9 +80,10 @@ defmodule Hephaestus.Runtime.Runner.Local do
     registry = Keyword.fetch!(opts, :registry)
     dynamic_supervisor = Keyword.fetch!(opts, :dynamic_supervisor)
     task_supervisor = Keyword.fetch!(opts, :task_supervisor)
+    telemetry_metadata = Keyword.get(opts, :telemetry_metadata, %{})
     remember_registry(registry)
 
-    instance = Instance.new(workflow, context)
+    instance = %{Instance.new(workflow, context) | telemetry_metadata: telemetry_metadata}
     :ok = storage_put(storage, instance)
 
     child_spec = %{
@@ -152,25 +157,71 @@ defmodule Hephaestus.Runtime.Runner.Local do
         {:stop, :normal}
 
       _ ->
-        {:ok, with_instance(state, recovered_instance), {:continue, :advance}}
+        instrumented_instance = %{
+          recovered_instance
+          | telemetry_start_time: System.monotonic_time()
+        }
+
+        initial_step = instrumented_instance.workflow.start()
+        initial_step_module = normalize_start_target(initial_step)
+
+        context_keys =
+          case instrumented_instance.context do
+            %{initial: initial} when is_map(initial) -> Map.keys(initial)
+            _ -> []
+          end
+
+        Telemetry.workflow_start(instrumented_instance, %{
+          initial_step: initial_step_module,
+          runner: __MODULE__,
+          context_keys: context_keys
+        })
+
+        state =
+          state
+          |> with_instance(instrumented_instance)
+          |> Map.put(:advance_count, 0)
+          |> Map.put(:step_count, 0)
+          |> Map.put(:waiting_since, nil)
+
+        {:ok, state, {:continue, :advance}}
     end
   end
 
   @impl GenServer
   def handle_continue(:advance, %{instance: instance} = state) do
+    status_before = instance.status
+    advance_start = System.monotonic_time()
+
     {:ok, next_instance} = Engine.advance(instance)
+
+    advance_duration = System.monotonic_time() - advance_start
+    advance_count = state.advance_count + 1
+
+    Telemetry.engine_advance(next_instance, advance_duration, %{
+      status_before: status_before,
+      status_after: next_instance.status,
+      active_steps_count: MapSet.size(next_instance.active_steps),
+      completed_in_advance:
+        MapSet.size(next_instance.completed_steps) - MapSet.size(instance.completed_steps),
+      iteration: advance_count
+    })
+
+    state = %{state | advance_count: advance_count}
 
     case next_instance do
       %Instance{status: :completed} ->
         state
         |> with_instance(next_instance)
         |> persist_instance()
+        |> emit_workflow_stop()
         |> reply_or_stop()
 
       %Instance{status: :waiting} ->
         next_state =
           state
           |> with_instance(next_instance)
+          |> Map.put(:waiting_since, System.monotonic_time())
           |> persist_instance()
 
         {:noreply, next_state}
@@ -193,55 +244,117 @@ defmodule Hephaestus.Runtime.Runner.Local do
         :execute_active,
         %{instance: instance, task_supervisor: task_supervisor} = state
       ) do
+    active_steps_count = MapSet.size(instance.active_steps)
+    concurrent = active_steps_count > 1
+
     results =
       instance.active_steps
       |> MapSet.to_list()
       |> Enum.sort()
       |> Enum.map(fn step_ref ->
         Task.Supervisor.async_nolink(task_supervisor, fn ->
-          {step_ref, execute_step(instance, step_ref)}
+          {step_ref,
+           execute_step_with_telemetry(instance, step_ref, concurrent, active_steps_count)}
         end)
       end)
       |> Enum.map(&Task.await(&1, 5_000))
 
+    {next_instance, step_count} =
+      Enum.reduce_while(
+        results,
+        {%{instance | status: :running, current_step: nil}, state.step_count},
+        fn
+          {step_ref, {:ok, event}}, {acc, sc} ->
+            completed =
+              acc
+              |> Engine.complete_step(step_ref, event, %{})
+              |> Engine.activate_transitions(step_ref, event)
+
+            targets = get_activated_targets(acc, completed, step_ref)
+            Telemetry.workflow_transition(completed, step_ref, event, targets, %{})
+
+            {:cont, {completed, sc + 1}}
+
+          {step_ref, {:ok, event, context_updates}}, {acc, sc} ->
+            completed =
+              acc
+              |> Engine.complete_step(step_ref, event, context_updates)
+              |> Engine.activate_transitions(step_ref, event)
+
+            targets = get_activated_targets(acc, completed, step_ref)
+            Telemetry.workflow_transition(completed, step_ref, event, targets, %{})
+
+            {:cont, {completed, sc + 1}}
+
+          {step_ref, {:ok, event, context_updates, metadata_updates}}, {acc, sc} ->
+            completed =
+              acc
+              |> Engine.complete_step(step_ref, event, context_updates, metadata_updates)
+              |> Engine.activate_transitions(step_ref, event)
+
+            targets = get_activated_targets(acc, completed, step_ref)
+            Telemetry.workflow_transition(completed, step_ref, event, targets, %{})
+
+            {:cont, {completed, sc + 1}}
+
+          {step_ref, {:async}}, {acc, sc} ->
+            {:cont, {%{acc | status: :waiting, current_step: step_ref}, sc}}
+
+          {step_ref, {:error, reason}}, {acc, sc} ->
+            failed = %{acc | status: :failed, current_step: nil, active_steps: MapSet.new()}
+
+            Telemetry.workflow_exception(failed, :error, reason, nil, %{
+              failed_step: step_ref,
+              step_count: sc,
+              advance_count: state.advance_count,
+              runner: __MODULE__
+            })
+
+            {:halt, {failed, sc}}
+        end
+      )
+
+    state = %{state | step_count: step_count}
+
     next_instance =
-      Enum.reduce_while(results, %{instance | status: :running, current_step: nil}, fn
-        {step_ref, {:ok, event}}, acc ->
-          {:cont,
-           acc
-           |> Engine.complete_step(step_ref, event, %{})
-           |> Engine.activate_transitions(step_ref, event)}
-
-        {step_ref, {:ok, event, context_updates}}, acc ->
-          {:cont,
-           acc
-           |> Engine.complete_step(step_ref, event, context_updates)
-           |> Engine.activate_transitions(step_ref, event)}
-
-        {step_ref, {:async}}, acc ->
-          {:cont, %{acc | status: :waiting, current_step: step_ref}}
-
-        {_step_ref, {:error, _reason}}, acc ->
-          {:halt, %{acc | status: :failed, current_step: nil, active_steps: MapSet.new()}}
-      end)
-      |> then(fn
-        %Instance{status: :failed} = failed_instance -> failed_instance
-        next_instance -> Engine.check_completion(next_instance)
-      end)
+      case next_instance do
+        %Instance{status: :failed} -> next_instance
+        other -> Engine.check_completion(other)
+      end
 
     next_state =
       state
       |> with_instance(next_instance)
+      |> maybe_set_waiting_since()
       |> persist_instance()
 
-    reply_or_stop(next_state)
+    case next_instance do
+      %Instance{status: :completed} ->
+        next_state
+        |> emit_workflow_stop()
+        |> reply_or_stop()
+
+      _ ->
+        reply_or_stop(next_state)
+    end
   end
 
   @impl GenServer
   def handle_cast({:resume, event}, %{instance: instance} = state) do
+    wait_duration = compute_wait_duration(state.waiting_since)
+    step = instance.current_step
+
+    Telemetry.step_resume(instance, step, %{
+      step_key: step,
+      resume_event: event,
+      source: :external,
+      wait_duration: wait_duration
+    })
+
     next_state =
       state
       |> with_instance(Engine.resume_step(instance, instance.current_step, event))
+      |> Map.put(:waiting_since, nil)
       |> persist_instance()
 
     {:noreply, next_state, {:continue, :advance}}
@@ -249,9 +362,19 @@ defmodule Hephaestus.Runtime.Runner.Local do
 
   @impl GenServer
   def handle_info({:scheduled_resume, step_ref}, %{instance: instance} = state) do
+    wait_duration = compute_wait_duration(state.waiting_since)
+
+    Telemetry.step_resume(instance, step_ref, %{
+      step_key: step_ref,
+      resume_event: :timeout,
+      source: :timeout,
+      wait_duration: wait_duration
+    })
+
     next_state =
       state
       |> with_instance(Engine.resume_step(instance, step_ref, :timeout))
+      |> Map.put(:waiting_since, nil)
       |> persist_instance()
 
     {:noreply, next_state, {:continue, :advance}}
@@ -266,12 +389,113 @@ defmodule Hephaestus.Runtime.Runner.Local do
     :ok
   end
 
-  defp execute_step(instance, step_ref) do
-    Engine.execute_step(instance, step_ref)
+  defp execute_step_with_telemetry(instance, step_ref, concurrent, active_steps_count) do
+    Telemetry.step_start(instance, step_ref, %{
+      step_key: step_ref,
+      concurrent: concurrent,
+      active_steps_count: active_steps_count
+    })
+
+    start_time = System.monotonic_time()
+
+    try do
+      result = Engine.execute_step(instance, step_ref)
+      duration = System.monotonic_time() - start_time
+
+      case result do
+        {:ok, event} ->
+          Telemetry.step_stop(instance, step_ref, duration, %{
+            step_key: step_ref,
+            event: event,
+            has_context_updates: false,
+            has_metadata_updates: false
+          })
+
+          result
+
+        {:ok, event, _context_updates} ->
+          Telemetry.step_stop(instance, step_ref, duration, %{
+            step_key: step_ref,
+            event: event,
+            has_context_updates: true,
+            has_metadata_updates: false
+          })
+
+          result
+
+        {:ok, event, _context_updates, _metadata_updates} ->
+          Telemetry.step_stop(instance, step_ref, duration, %{
+            step_key: step_ref,
+            event: event,
+            has_context_updates: true,
+            has_metadata_updates: true
+          })
+
+          result
+
+        {:async} ->
+          Telemetry.step_async(instance, step_ref, duration, %{
+            step_key: step_ref,
+            instance_status: :waiting
+          })
+
+          result
+
+        {:error, reason} ->
+          Telemetry.step_exception(instance, step_ref, duration, :error, reason, nil, %{
+            step_key: step_ref
+          })
+
+          result
+      end
+    rescue
+      exception ->
+        duration = System.monotonic_time() - start_time
+
+        Telemetry.step_exception(
+          instance,
+          step_ref,
+          duration,
+          :error,
+          exception,
+          __STACKTRACE__,
+          %{step_key: step_ref}
+        )
+
+        reraise exception, __STACKTRACE__
+    end
   end
 
   defp normalize_event(event) when is_atom(event), do: event
   defp normalize_event(event) when is_binary(event), do: String.to_existing_atom(event)
+
+  defp normalize_start_target({step, _opts}), do: step
+  defp normalize_start_target(step) when is_atom(step), do: step
+
+  defp emit_workflow_stop(%{instance: instance} = state) do
+    Telemetry.workflow_stop(instance, %{
+      step_count: state.step_count,
+      advance_count: state.advance_count,
+      completed_steps: MapSet.to_list(instance.completed_steps),
+      runner: __MODULE__
+    })
+
+    state
+  end
+
+  defp get_activated_targets(before_instance, after_instance, _step_ref) do
+    new_active = MapSet.difference(after_instance.active_steps, before_instance.active_steps)
+    MapSet.to_list(new_active)
+  end
+
+  defp maybe_set_waiting_since(%{instance: %Instance{status: :waiting}} = state) do
+    %{state | waiting_since: System.monotonic_time()}
+  end
+
+  defp maybe_set_waiting_since(state), do: state
+
+  defp compute_wait_duration(nil), do: nil
+  defp compute_wait_duration(waiting_since), do: System.monotonic_time() - waiting_since
 
   defp persist_instance(%{instance: instance, storage: storage} = state) do
     :ok = storage_put(storage, instance)

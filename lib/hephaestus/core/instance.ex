@@ -33,7 +33,9 @@ defmodule Hephaestus.Core.Instance do
     active_steps: MapSet.new(),
     completed_steps: MapSet.new(),
     runtime_metadata: %{},
-    execution_history: []
+    execution_history: [],
+    telemetry_metadata: %{},
+    telemetry_start_time: nil
   ]
 
   @typedoc "The lifecycle status of a workflow instance."
@@ -50,7 +52,9 @@ defmodule Hephaestus.Core.Instance do
           active_steps: MapSet.t(module()),
           completed_steps: MapSet.t(module()),
           runtime_metadata: map(),
-          execution_history: list()
+          execution_history: list(),
+          telemetry_metadata: map(),
+          telemetry_start_time: integer() | nil
         }
 
   @doc """

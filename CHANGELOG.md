@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Telemetry event emission for workflow and step lifecycle (11 events).
+- `Hephaestus.Telemetry` module with emission helpers for all events.
+- `Hephaestus.Telemetry.LogHandler` for structured Logger output with configurable log levels and event filtering.
+- `Hephaestus.Telemetry.Metrics` with 9 pre-built metric definitions for Prometheus, StatsD, and LiveDashboard.
+- `telemetry_metadata` option on `start_instance/3` for caller-supplied correlation data (request IDs, user IDs, trace context).
+- `telemetry_start_time` on Instance for workflow duration tracking.
+- Telemetry instrumentation in `Runner.Local` for all lifecycle points: workflow start/stop/exception, step start/stop/async/exception/resume, engine advance, and workflow transitions.
+- `advance_count`, `step_count`, and `waiting_since` tracking in `Runner.Local` GenServer state.
+- Telemetry event reference guide (`guides/telemetry.md`).
+- New dependencies: `:telemetry ~> 1.0`, `:telemetry_metrics ~> 1.0`.
+
+### Changed
+
+- `start_instance/2` now accepts optional third argument (opts keyword list).
+- `Instance` struct has two new fields with defaults (non-breaking).
+
 ## [0.1.4] - 2026-04-08
 
 ### Added
