@@ -9,6 +9,7 @@ defmodule Hephaestus.Steps.Step do
 
     * `{:ok, event}` - step completed synchronously, emitting the named event
     * `{:ok, event, context_updates}` - completed with data to store in context
+    * `{:ok, event, context_updates, metadata_updates}` - completed with context and runtime metadata updates
     * `{:async}` - step is async (e.g., waiting for external event or timer)
     * `{:error, reason}` - step failed
 
@@ -39,6 +40,8 @@ defmodule Hephaestus.Steps.Step do
   @type event :: atom()
   @typedoc "A map of key-value pairs to merge into the workflow context after a step completes."
   @type context_updates :: map()
+  @typedoc "A map of key-value pairs to merge into the instance's runtime metadata for observability."
+  @type metadata_updates :: map()
   @typedoc "Retry configuration controlling how the runner retries a failed step."
   @type retry_config :: %{
           max_attempts: pos_integer(),
@@ -50,12 +53,14 @@ defmodule Hephaestus.Steps.Step do
 
   * `{:ok, event}` — step completed synchronously, emitting the named event.
   * `{:ok, event, context_updates}` — completed with additional data to store in the workflow context.
+  * `{:ok, event, context_updates, metadata_updates}` — completed with context and runtime metadata updates.
   * `{:async}` — step is asynchronous and will be resumed later (e.g., after a timer or external event).
   * `{:error, reason}` — step failed with the given reason.
   """
   @type result ::
           {:ok, event()}
           | {:ok, event(), context_updates()}
+          | {:ok, event(), context_updates(), metadata_updates()}
           | {:async}
           | {:error, term()}
 
@@ -131,6 +136,14 @@ defmodule Hephaestus.Steps.Step do
       def execute(_instance, _config, context) do
         items = context.initial.items
         {:ok, :done, %{item_count: length(items)}}
+      end
+
+  Step that emits runtime metadata for observability:
+
+      @impl true
+      def execute(_instance, _config, context) do
+        order_id = context.initial.order_id
+        {:ok, :done, %{total: 100}, %{"order_id" => order_id}}
       end
 
   Asynchronous step (waits for external resume):

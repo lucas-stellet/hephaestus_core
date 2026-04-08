@@ -149,5 +149,17 @@ defmodule Hephaestus.Test.V2.StepWithCustomKey do
   def execute(_instance, _config, _context), do: {:ok, :done, %{data: true}}
 end
 
+defmodule Hephaestus.Test.V2.StepWithMetadata do
+  @behaviour Hephaestus.Steps.Step
+
+  @impl true
+  def events, do: [:done]
+
+  @impl true
+  def execute(_instance, _config, context) do
+    {:ok, :done, %{processed: true}, %{"order_id" => context.initial[:order_id]}}
+  end
+end
+
 defmodule Hephaestus.Test.V2.NotAStep do
 end

@@ -58,8 +58,10 @@ defmodule Hephaestus.Core.EngineV2Test do
 
   describe "execute_step/2" do
     test "calls module.execute/3 with config from step_configs" do
-      instance = %{Instance.new(Hephaestus.Test.V2.LinearWorkflow, %{}) |
-        step_configs: %{Hephaestus.Test.V2.ConfigStep => %{timeout: 5000}}}
+      instance = %{
+        Instance.new(Hephaestus.Test.V2.LinearWorkflow, %{})
+        | step_configs: %{Hephaestus.Test.V2.ConfigStep => %{timeout: 5000}}
+      }
 
       result = Engine.execute_step(instance, Hephaestus.Test.V2.ConfigStep)
 
@@ -83,13 +85,16 @@ defmodule Hephaestus.Core.EngineV2Test do
     end
   end
 
-  describe "complete_step/4" do
+  describe "complete_step/4 and complete_step/5" do
     test "moves step from active to completed and stores context with snake_case key" do
-      instance = %{Instance.new(Hephaestus.Test.V2.LinearWorkflow, %{}) |
-        active_steps: MapSet.new([Hephaestus.Test.V2.StepA]),
-        status: :running}
+      instance = %{
+        Instance.new(Hephaestus.Test.V2.LinearWorkflow, %{})
+        | active_steps: MapSet.new([Hephaestus.Test.V2.StepA]),
+          status: :running
+      }
 
-      completed = Engine.complete_step(instance, Hephaestus.Test.V2.StepA, :done, %{item_count: 3})
+      completed =
+        Engine.complete_step(instance, Hephaestus.Test.V2.StepA, :done, %{item_count: 3})
 
       refute MapSet.member?(completed.active_steps, Hephaestus.Test.V2.StepA)
       assert MapSet.member?(completed.completed_steps, Hephaestus.Test.V2.StepA)
@@ -97,10 +102,12 @@ defmodule Hephaestus.Core.EngineV2Test do
     end
 
     test "cleans up step_configs after completion" do
-      instance = %{Instance.new(Hephaestus.Test.V2.LinearWorkflow, %{}) |
-        active_steps: MapSet.new([Hephaestus.Test.V2.ConfigStep]),
-        step_configs: %{Hephaestus.Test.V2.ConfigStep => %{timeout: 5000}},
-        status: :running}
+      instance = %{
+        Instance.new(Hephaestus.Test.V2.LinearWorkflow, %{})
+        | active_steps: MapSet.new([Hephaestus.Test.V2.ConfigStep]),
+          step_configs: %{Hephaestus.Test.V2.ConfigStep => %{timeout: 5000}},
+          status: :running
+      }
 
       completed = Engine.complete_step(instance, Hephaestus.Test.V2.ConfigStep, :done, %{})
 
@@ -108,21 +115,93 @@ defmodule Hephaestus.Core.EngineV2Test do
     end
 
     test "uses step_key/0 override for context key" do
-      instance = %{Instance.new(Hephaestus.Test.V2.LinearWorkflow, %{}) |
-        active_steps: MapSet.new([Hephaestus.Test.V2.StepWithCustomKey]),
-        status: :running}
+      instance = %{
+        Instance.new(Hephaestus.Test.V2.LinearWorkflow, %{})
+        | active_steps: MapSet.new([Hephaestus.Test.V2.StepWithCustomKey]),
+          status: :running
+      }
 
-      completed = Engine.complete_step(instance, Hephaestus.Test.V2.StepWithCustomKey, :done, %{data: true})
+      completed =
+        Engine.complete_step(instance, Hephaestus.Test.V2.StepWithCustomKey, :done, %{data: true})
 
       assert completed.context.steps.custom_key.data == true
+    end
+
+    test "stores runtime metadata when provided as 5th argument" do
+      instance = %{
+        Instance.new(Hephaestus.Test.V2.LinearWorkflow, %{})
+        | active_steps: MapSet.new([Hephaestus.Test.V2.StepA]),
+          status: :running
+      }
+
+      completed =
+        Engine.complete_step(instance, Hephaestus.Test.V2.StepA, :done, %{result: true}, %{
+          "order_id" => 42
+        })
+
+      assert completed.runtime_metadata == %{"order_id" => 42}
+    end
+
+    test "accumulates runtime metadata across multiple steps" do
+      instance = %{
+        Instance.new(Hephaestus.Test.V2.LinearWorkflow, %{})
+        | active_steps: MapSet.new([Hephaestus.Test.V2.StepA, Hephaestus.Test.V2.StepB]),
+          status: :running
+      }
+
+      instance =
+        Engine.complete_step(instance, Hephaestus.Test.V2.StepA, :done, %{}, %{
+          "order_id" => 42
+        })
+
+      instance =
+        Engine.complete_step(instance, Hephaestus.Test.V2.StepB, :done, %{}, %{
+          "status" => "paid"
+        })
+
+      assert instance.runtime_metadata == %{"order_id" => 42, "status" => "paid"}
+    end
+
+    test "later metadata overwrites earlier keys" do
+      instance = %{
+        Instance.new(Hephaestus.Test.V2.LinearWorkflow, %{})
+        | active_steps: MapSet.new([Hephaestus.Test.V2.StepA, Hephaestus.Test.V2.StepB]),
+          status: :running
+      }
+
+      instance =
+        Engine.complete_step(instance, Hephaestus.Test.V2.StepA, :done, %{}, %{
+          "status" => "pending"
+        })
+
+      instance =
+        Engine.complete_step(instance, Hephaestus.Test.V2.StepB, :done, %{}, %{
+          "status" => "paid"
+        })
+
+      assert instance.runtime_metadata == %{"status" => "paid"}
+    end
+
+    test "runtime_metadata defaults to empty map when not provided" do
+      instance = %{
+        Instance.new(Hephaestus.Test.V2.LinearWorkflow, %{})
+        | active_steps: MapSet.new([Hephaestus.Test.V2.StepA]),
+          status: :running
+      }
+
+      completed = Engine.complete_step(instance, Hephaestus.Test.V2.StepA, :done, %{})
+
+      assert completed.runtime_metadata == %{}
     end
   end
 
   describe "activate_transitions/3" do
     test "activates next step from transit/2" do
-      instance = %{Instance.new(Hephaestus.Test.V2.LinearWorkflow, %{}) |
-        completed_steps: MapSet.new([Hephaestus.Test.V2.StepA]),
-        status: :running}
+      instance = %{
+        Instance.new(Hephaestus.Test.V2.LinearWorkflow, %{})
+        | completed_steps: MapSet.new([Hephaestus.Test.V2.StepA]),
+          status: :running
+      }
 
       activated = Engine.activate_transitions(instance, Hephaestus.Test.V2.StepA, :done)
 
@@ -130,9 +209,11 @@ defmodule Hephaestus.Core.EngineV2Test do
     end
 
     test "activates multiple steps on fan-out" do
-      instance = %{Instance.new(Hephaestus.Test.V2.FanOutWorkflow, %{}) |
-        completed_steps: MapSet.new([Hephaestus.Test.V2.StepA]),
-        status: :running}
+      instance = %{
+        Instance.new(Hephaestus.Test.V2.FanOutWorkflow, %{})
+        | completed_steps: MapSet.new([Hephaestus.Test.V2.StepA]),
+          status: :running
+      }
 
       activated = Engine.activate_transitions(instance, Hephaestus.Test.V2.StepA, :done)
 
@@ -141,9 +222,11 @@ defmodule Hephaestus.Core.EngineV2Test do
     end
 
     test "fan-in waits for all predecessors before activating join" do
-      instance = %{Instance.new(Hephaestus.Test.V2.FanOutWorkflow, %{}) |
-        completed_steps: MapSet.new([Hephaestus.Test.V2.StepA, Hephaestus.Test.V2.ParallelA]),
-        status: :running}
+      instance = %{
+        Instance.new(Hephaestus.Test.V2.FanOutWorkflow, %{})
+        | completed_steps: MapSet.new([Hephaestus.Test.V2.StepA, Hephaestus.Test.V2.ParallelA]),
+          status: :running
+      }
 
       activated = Engine.activate_transitions(instance, Hephaestus.Test.V2.ParallelA, :done)
 
@@ -158,13 +241,17 @@ defmodule Hephaestus.Core.EngineV2Test do
         def start, do: Hephaestus.Test.V2.StepA
 
         @impl true
-        def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: {Hephaestus.Test.V2.ConfigStep, %{timeout: 1000}}
+        def transit(Hephaestus.Test.V2.StepA, :done, _ctx),
+          do: {Hephaestus.Test.V2.ConfigStep, %{timeout: 1000}}
+
         def transit(Hephaestus.Test.V2.ConfigStep, :done, _ctx), do: Hephaestus.Steps.Done
       end
 
-      instance = %{Instance.new(TransitionConfigWorkflow, %{}) |
-        completed_steps: MapSet.new([Hephaestus.Test.V2.StepA]),
-        status: :running}
+      instance = %{
+        Instance.new(TransitionConfigWorkflow, %{})
+        | completed_steps: MapSet.new([Hephaestus.Test.V2.StepA]),
+          status: :running
+      }
 
       activated = Engine.activate_transitions(instance, Hephaestus.Test.V2.StepA, :done)
 

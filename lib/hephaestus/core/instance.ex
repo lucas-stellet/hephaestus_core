@@ -16,6 +16,7 @@ defmodule Hephaestus.Core.Instance do
     * `step_configs` - per-step config overrides keyed by step module
     * `active_steps` - `MapSet` of step modules currently being executed
     * `completed_steps` - `MapSet` of step modules that have finished
+    * `runtime_metadata` - dynamic metadata accumulated from step executions
     * `execution_history` - list of `Hephaestus.Core.ExecutionEntry` records
   """
 
@@ -31,6 +32,7 @@ defmodule Hephaestus.Core.Instance do
     step_configs: %{},
     active_steps: MapSet.new(),
     completed_steps: MapSet.new(),
+    runtime_metadata: %{},
     execution_history: []
   ]
 
@@ -47,6 +49,7 @@ defmodule Hephaestus.Core.Instance do
           step_configs: %{optional(module()) => map()},
           active_steps: MapSet.t(module()),
           completed_steps: MapSet.t(module()),
+          runtime_metadata: map(),
           execution_history: list()
         }
 

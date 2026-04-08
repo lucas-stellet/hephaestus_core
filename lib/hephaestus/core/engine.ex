@@ -67,6 +67,7 @@ defmodule Hephaestus.Core.Engine do
 
     * `{:ok, event}` - step completed synchronously with the given event atom
     * `{:ok, event, context_updates}` - step completed with context updates
+    * `{:ok, event, context_updates, metadata_updates}` - step completed with context and runtime metadata updates
     * `{:async}` - step will complete asynchronously (instance enters `:waiting`)
     * `{:error, reason}` - step execution failed
 
@@ -84,7 +85,11 @@ defmodule Hephaestus.Core.Engine do
       iex> {:async} = Engine.execute_step(instance, MyApp.Steps.WaitForPayment)
   """
   @spec execute_step(Instance.t(), module()) ::
-          {:ok, atom()} | {:ok, atom(), map()} | {:async} | {:error, term()}
+          {:ok, atom()}
+          | {:ok, atom(), map()}
+          | {:ok, atom(), map(), map()}
+          | {:async}
+          | {:error, term()}
   def execute_step(%Instance{} = instance, step_module) when is_atom(step_module) do
     ensure_module_loaded(step_module)
 
@@ -103,6 +108,9 @@ defmodule Hephaestus.Core.Engine do
   `context_updates` into the instance context under the step's context key,
   and removes the step's runtime configuration.
 
+  When `metadata_updates` is provided, merges them into the instance's
+  `runtime_metadata` map for observability purposes.
+
   ## Parameters
 
     * `instance` - a `Hephaestus.Core.Instance` struct
@@ -110,6 +118,8 @@ defmodule Hephaestus.Core.Engine do
     * `event` - the completion event atom (unused internally, passed through
       for consistency)
     * `context_updates` - a map of results to store in the instance context
+    * `metadata_updates` - an optional map of runtime metadata to merge
+      into the instance (default: `%{}`)
 
   ## Returns
 
@@ -122,10 +132,24 @@ defmodule Hephaestus.Core.Engine do
       true
       iex> instance.context.steps.validate_order.item_count
       3
+
+  With runtime metadata:
+
+      iex> instance = Engine.complete_step(instance, MyApp.Steps.ProcessOrder, :done, %{total: 100}, %{"order_id" => 42})
+      iex> instance.runtime_metadata
+      %{"order_id" => 42}
   """
-  @spec complete_step(Instance.t(), module(), atom(), map()) :: Instance.t()
-  def complete_step(%Instance{} = instance, step_module, _event, context_updates)
-      when is_atom(step_module) and is_map(context_updates) do
+  @spec complete_step(Instance.t(), module(), atom(), map(), map()) :: Instance.t()
+  def complete_step(instance, step_module, event, context_updates, metadata_updates \\ %{})
+
+  def complete_step(
+        %Instance{} = instance,
+        step_module,
+        _event,
+        context_updates,
+        metadata_updates
+      )
+      when is_atom(step_module) and is_map(context_updates) and is_map(metadata_updates) do
     context_key = module_to_context_key(step_module)
 
     %{
@@ -133,6 +157,7 @@ defmodule Hephaestus.Core.Engine do
       | active_steps: MapSet.delete(instance.active_steps, step_module),
         completed_steps: MapSet.put(instance.completed_steps, step_module),
         context: Context.put_step_result(instance.context, context_key, context_updates),
+        runtime_metadata: Map.merge(instance.runtime_metadata, metadata_updates),
         step_configs: Map.delete(instance.step_configs, step_module)
     }
   end
