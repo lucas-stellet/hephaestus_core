@@ -15,8 +15,7 @@ This guide explains what each extension does, when to use it, and how to set it 
 | Prototyping, tests, single-node | `hephaestus` | ETS storage + local runner. Zero external deps. |
 | Workflows that survive restarts | `hephaestus` + `hephaestus_ecto` | Ecto adapter persists instances as JSONB in PostgreSQL. |
 | Distributed execution, retries, job queues | `hephaestus` + `hephaestus_ecto` + `hephaestus_oban` | Oban runner replaces GenServer with durable, retryable jobs. |
-| Observability, metrics, structured logging | `hephaestus` (built-in since 0.1.5) | Telemetry events for dashboards, alerting, and debugging. |
-| Full production stack | All three | Persistent, distributed, observable workflows. |
+| Full production stack | All three + built-in telemetry | Persistent, distributed, observable workflows. |
 
 Start with core alone during development. Add extensions as your requirements
 grow — each one is a dependency swap, not a rewrite.
@@ -211,15 +210,6 @@ For fine-grained control, use separate queues for orchestration and execution:
 - Oban >= 2.14
 - PostgreSQL (advisory locks and JSONB)
 - `hephaestus_ecto` ~> 0.1.0
-
-## Telemetry (built-in)
-
-Since version 0.1.5, telemetry is built into the core package. There is no
-separate `hephaestus_telemetry` package — all telemetry events, the log handler,
-and metric definitions ship with `hephaestus` itself.
-
-See the [Telemetry guide](telemetry.md) for full documentation including event
-reference, quick start, and usage examples.
 
 ## Combining extensions
 
