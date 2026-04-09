@@ -287,7 +287,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTelemetryTest do
     test "duration is nil when telemetry_start_time is nil", %{opts: _opts, storage: _storage} do
       # Create an instance manually with nil telemetry_start_time
       instance = %{
-        Hephaestus.Core.Instance.new(Hephaestus.Test.V2.LinearWorkflow, %{})
+        Hephaestus.Core.Instance.new(Hephaestus.Test.V2.LinearWorkflow, 1, %{})
         | telemetry_start_time: nil
       }
 
@@ -321,7 +321,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTelemetryTest do
 
   describe "legacy Instance backward compatibility" do
     test "Instance struct defaults telemetry fields", %{storage: storage} do
-      instance = Hephaestus.Core.Instance.new(Hephaestus.Test.V2.LinearWorkflow, %{})
+      instance = Hephaestus.Core.Instance.new(Hephaestus.Test.V2.LinearWorkflow, 1, %{})
 
       # Verify defaults are applied
       assert instance.telemetry_metadata == %{}

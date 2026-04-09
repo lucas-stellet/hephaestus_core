@@ -9,7 +9,7 @@ defmodule Hephaestus.Steps.WaitForEventTest do
 
   describe "execute/3" do
     test "returns async" do
-      instance = Instance.new(TestWorkflow, %{})
+      instance = Instance.new(TestWorkflow, 1, %{})
       config = %{event_name: "payment_confirmed"}
       context = Context.new(%{})
 
@@ -19,7 +19,7 @@ defmodule Hephaestus.Steps.WaitForEventTest do
     end
 
     test "returns async with timeout config" do
-      instance = Instance.new(TestWorkflow, %{})
+      instance = Instance.new(TestWorkflow, 1, %{})
       config = %{event_name: "payment_confirmed", timeout_ms: 60_000}
       context = Context.new(%{})
 

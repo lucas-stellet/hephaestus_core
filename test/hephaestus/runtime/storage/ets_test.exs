@@ -21,7 +21,7 @@ defmodule Hephaestus.Runtime.Storage.ETSTest do
 
   describe "put/1 and get/1" do
     test "stores and retrieves instance", %{storage: storage} do
-      instance = Instance.new(TestWorkflow, %{order_id: 123})
+      instance = Instance.new(TestWorkflow, 1, %{order_id: 123})
 
       :ok = ETSStorage.put(storage, instance)
       result = ETSStorage.get(storage, instance.id)
@@ -38,7 +38,7 @@ defmodule Hephaestus.Runtime.Storage.ETSTest do
     end
 
     test "overwrites existing instance on put", %{storage: storage} do
-      instance = Instance.new(TestWorkflow, %{})
+      instance = Instance.new(TestWorkflow, 1, %{})
       :ok = ETSStorage.put(storage, instance)
 
       updated = %{instance | status: :completed}
@@ -52,7 +52,7 @@ defmodule Hephaestus.Runtime.Storage.ETSTest do
 
   describe "delete/1" do
     test "removes instance from storage", %{storage: storage} do
-      instance = Instance.new(TestWorkflow, %{})
+      instance = Instance.new(TestWorkflow, 1, %{})
       :ok = ETSStorage.put(storage, instance)
 
       :ok = ETSStorage.delete(storage, instance.id)
@@ -67,8 +67,8 @@ defmodule Hephaestus.Runtime.Storage.ETSTest do
 
   describe "query/1" do
     test "returns all instances when no filters", %{storage: storage} do
-      instance_a = Instance.new(TestWorkflow, %{})
-      instance_b = Instance.new(TestWorkflow, %{})
+      instance_a = Instance.new(TestWorkflow, 1, %{})
+      instance_b = Instance.new(TestWorkflow, 1, %{})
       :ok = ETSStorage.put(storage, instance_a)
       :ok = ETSStorage.put(storage, instance_b)
 
@@ -78,8 +78,8 @@ defmodule Hephaestus.Runtime.Storage.ETSTest do
     end
 
     test "filters by status", %{storage: storage} do
-      pending = Instance.new(TestWorkflow, %{})
-      completed = %{Instance.new(TestWorkflow, %{}) | status: :completed}
+      pending = Instance.new(TestWorkflow, 1, %{})
+      completed = %{Instance.new(TestWorkflow, 1, %{}) | status: :completed}
       :ok = ETSStorage.put(storage, pending)
       :ok = ETSStorage.put(storage, completed)
 
@@ -90,8 +90,8 @@ defmodule Hephaestus.Runtime.Storage.ETSTest do
     end
 
     test "filters by workflow", %{storage: storage} do
-      instance_a = Instance.new(WorkflowA, %{})
-      instance_b = Instance.new(WorkflowB, %{})
+      instance_a = Instance.new(WorkflowA, 1, %{})
+      instance_b = Instance.new(WorkflowB, 1, %{})
       :ok = ETSStorage.put(storage, instance_a)
       :ok = ETSStorage.put(storage, instance_b)
 
@@ -102,7 +102,7 @@ defmodule Hephaestus.Runtime.Storage.ETSTest do
     end
 
     test "returns empty list when no matches", %{storage: storage} do
-      instance = Instance.new(TestWorkflow, %{})
+      instance = Instance.new(TestWorkflow, 1, %{})
       :ok = ETSStorage.put(storage, instance)
 
       results = ETSStorage.query(storage, status: :completed)
@@ -113,7 +113,7 @@ defmodule Hephaestus.Runtime.Storage.ETSTest do
 
   describe "concurrent access" do
     test "stores every instance written by parallel puts", %{storage: storage} do
-      instances = for index <- 1..48, do: Instance.new(TestWorkflow, %{index: index})
+      instances = for index <- 1..48, do: Instance.new(TestWorkflow, 1, %{index: index})
 
       results =
         Task.async_stream(
@@ -140,10 +140,11 @@ defmodule Hephaestus.Runtime.Storage.ETSTest do
       assert stored_ids == Enum.sort(Enum.map(instances, & &1.id))
     end
 
-    test "returns only not_found or the final persisted instance during concurrent get and put", %{
-      storage: storage
-    } do
-      instances = for index <- 1..24, do: Instance.new(TestWorkflow, %{index: index})
+    test "returns only not_found or the final persisted instance during concurrent get and put",
+         %{
+           storage: storage
+         } do
+      instances = for index <- 1..24, do: Instance.new(TestWorkflow, 1, %{index: index})
       ids = MapSet.new(Enum.map(instances, & &1.id))
 
       writer =
@@ -188,11 +189,12 @@ defmodule Hephaestus.Runtime.Storage.ETSTest do
     end
 
     test "queries converge to the full set while writes are in flight", %{storage: storage} do
-      pending_instances = for index <- 1..12, do: Instance.new(TestWorkflow, %{kind: :pending, index: index})
+      pending_instances =
+        for index <- 1..12, do: Instance.new(TestWorkflow, 1, %{kind: :pending, index: index})
 
       completed_instances =
         for index <- 1..12 do
-          %{Instance.new(TestWorkflow, %{kind: :completed, index: index}) | status: :completed}
+          %{Instance.new(TestWorkflow, 1, %{kind: :completed, index: index}) | status: :completed}
         end
 
       all_instances = pending_instances ++ completed_instances
@@ -223,7 +225,8 @@ defmodule Hephaestus.Runtime.Storage.ETSTest do
       assert Task.await(writer, 5_000) == :ok
 
       assert Enum.all?(observed_counts, fn %{all: all, completed: completed} ->
-               all >= completed and all <= length(all_instances) and completed <= length(completed_instances)
+               all >= completed and all <= length(all_instances) and
+                 completed <= length(completed_instances)
              end)
 
       assert length(ETSStorage.query(storage, [])) == length(all_instances)

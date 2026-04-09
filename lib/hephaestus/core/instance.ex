@@ -10,6 +10,7 @@ defmodule Hephaestus.Core.Instance do
 
     * `id` - unique identifier (UUID v4)
     * `workflow` - the workflow module being executed
+    * `workflow_version` - the version of the workflow definition (positive integer, default 1)
     * `current_step` - the step module currently being processed (or `nil`)
     * `status` - one of `:pending`, `:running`, `:waiting`, `:completed`, `:failed`
     * `context` - `Hephaestus.Core.Context` with initial data and step results
@@ -27,6 +28,7 @@ defmodule Hephaestus.Core.Instance do
     :id,
     :workflow,
     :current_step,
+    workflow_version: 1,
     status: :pending,
     context: %Context{initial: %{}, steps: %{}},
     step_configs: %{},
@@ -45,6 +47,7 @@ defmodule Hephaestus.Core.Instance do
   @type t :: %__MODULE__{
           id: String.t(),
           workflow: module(),
+          workflow_version: pos_integer(),
           current_step: module() | nil,
           status: status(),
           context: Context.t(),
@@ -66,27 +69,47 @@ defmodule Hephaestus.Core.Instance do
   ## Parameters
 
     * `workflow` - the workflow module to execute
+    * `version` - the workflow version (positive integer)
     * `context` - a map of initial data passed to the workflow (default: `%{}`)
 
   ## Examples
 
-      iex> instance = Instance.new(MyApp.Workflows.OrderFlow, %{order_id: 123})
+      iex> instance = Instance.new(MyApp.Workflows.OrderFlow, 1, %{order_id: 123})
       iex> instance.status
       :pending
       iex> instance.context.initial
       %{order_id: 123}
+      iex> instance.workflow_version
+      1
 
   With default empty context:
 
-      iex> instance = Instance.new(MyApp.Workflows.OrderFlow)
+      iex> instance = Instance.new(MyApp.Workflows.OrderFlow, 1)
       iex> instance.context.initial
       %{}
   """
+  @spec new(module()) :: t()
+  def new(workflow) when is_atom(workflow) do
+    new(workflow, 1, %{})
+  end
+
   @spec new(module(), map()) :: t()
-  def new(workflow, context \\ %{}) when is_atom(workflow) and is_map(context) do
+  def new(workflow, context) when is_atom(workflow) and is_map(context) do
+    new(workflow, 1, context)
+  end
+
+  @spec new(module(), pos_integer()) :: t()
+  def new(workflow, version) when is_atom(workflow) and is_integer(version) and version > 0 do
+    new(workflow, version, %{})
+  end
+
+  @spec new(module(), pos_integer(), map()) :: t()
+  def new(workflow, version, context)
+      when is_atom(workflow) and is_integer(version) and version > 0 and is_map(context) do
     %__MODULE__{
       id: generate_uuid(),
       workflow: workflow,
+      workflow_version: version,
       context: Context.new(context)
     }
   end

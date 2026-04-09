@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `workflow_version` field on `Hephaestus.Core.Instance` (positive integer, default 1).
+- `Instance.new/3` accepting `(workflow, version, context)` with guard rejecting non-positive versions.
+
+### Changed
+
+- **Breaking:** `Instance.new/2` replaced by `Instance.new/3` — all callers must pass a version argument.
+
 ## [0.1.5] - 2026-04-08
 
 ### Added

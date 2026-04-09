@@ -5,22 +5,29 @@ defmodule Hephaestus.Core.InstanceV2Test do
 
   describe "step_configs field" do
     test "new instance has empty step_configs" do
-      instance = Instance.new(SomeWorkflow, %{})
+      instance = Instance.new(SomeWorkflow, 1, %{})
 
       assert instance.step_configs == %{}
     end
 
     test "step_configs can store module => config mapping" do
-      instance = Instance.new(SomeWorkflow, %{})
+      instance = Instance.new(SomeWorkflow, 1, %{})
 
-      updated = %{instance | step_configs: Map.put(instance.step_configs, MyStep, %{timeout: 5000})}
+      updated = %{
+        instance
+        | step_configs: Map.put(instance.step_configs, MyStep, %{timeout: 5000})
+      }
 
       assert updated.step_configs == %{MyStep => %{timeout: 5000}}
     end
 
     test "step_configs can be cleared per module" do
-      instance = Instance.new(SomeWorkflow, %{})
-      with_config = %{instance | step_configs: %{MyStep => %{timeout: 5000}, OtherStep => %{retries: 3}}}
+      instance = Instance.new(SomeWorkflow, 1, %{})
+
+      with_config = %{
+        instance
+        | step_configs: %{MyStep => %{timeout: 5000}, OtherStep => %{retries: 3}}
+      }
 
       cleared = %{with_config | step_configs: Map.delete(with_config.step_configs, MyStep)}
 
@@ -28,9 +35,55 @@ defmodule Hephaestus.Core.InstanceV2Test do
     end
   end
 
+  describe "workflow_version field" do
+    test "new/3 creates instance with explicit version" do
+      # Arrange
+      workflow = Hephaestus.Test.V2.LinearWorkflow
+      version = 2
+
+      # Act
+      instance = Instance.new(workflow, version, %{order_id: 1})
+
+      # Assert
+      assert instance.workflow == Hephaestus.Test.V2.LinearWorkflow
+      assert instance.workflow_version == 2
+      assert instance.context.initial == %{order_id: 1}
+      assert instance.status == :pending
+      assert is_binary(instance.id)
+    end
+
+    test "new/3 with default empty context" do
+      # Arrange & Act
+      instance = Instance.new(SomeWorkflow, 1)
+
+      # Assert
+      assert instance.workflow_version == 1
+      assert instance.context.initial == %{}
+    end
+
+    test "workflow_version defaults to 1 in bare struct" do
+      # Arrange & Act
+      instance = %Instance{id: "test-id", workflow: SomeWorkflow}
+
+      # Assert
+      assert instance.workflow_version == 1
+    end
+
+    test "new/3 rejects non-positive version" do
+      # Assert
+      assert_raise FunctionClauseError, fn ->
+        Instance.new(SomeWorkflow, 0, %{})
+      end
+
+      assert_raise FunctionClauseError, fn ->
+        Instance.new(SomeWorkflow, -1, %{})
+      end
+    end
+  end
+
   describe "types reflect module identity" do
     test "active_steps stores modules" do
-      instance = Instance.new(SomeWorkflow, %{})
+      instance = Instance.new(SomeWorkflow, 1, %{})
 
       updated = %{instance | active_steps: MapSet.new([MyApp.Steps.ValidateOrder])}
 
@@ -38,7 +91,7 @@ defmodule Hephaestus.Core.InstanceV2Test do
     end
 
     test "completed_steps stores modules" do
-      instance = Instance.new(SomeWorkflow, %{})
+      instance = Instance.new(SomeWorkflow, 1, %{})
 
       updated = %{instance | completed_steps: MapSet.new([MyApp.Steps.ValidateOrder])}
 
@@ -46,7 +99,7 @@ defmodule Hephaestus.Core.InstanceV2Test do
     end
 
     test "current_step stores module" do
-      instance = Instance.new(SomeWorkflow, %{})
+      instance = Instance.new(SomeWorkflow, 1, %{})
 
       updated = %{instance | current_step: MyApp.Steps.ValidateOrder}
 

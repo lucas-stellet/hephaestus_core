@@ -9,7 +9,7 @@ defmodule Hephaestus.Steps.WaitTest do
 
   describe "execute/3" do
     test "returns async for valid config" do
-      instance = Instance.new(TestWorkflow, %{})
+      instance = Instance.new(TestWorkflow, 1, %{})
       config = %{duration: 30, unit: :minute}
       context = Context.new(%{})
 
