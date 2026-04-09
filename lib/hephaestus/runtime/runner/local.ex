@@ -83,7 +83,13 @@ defmodule Hephaestus.Runtime.Runner.Local do
     telemetry_metadata = Keyword.get(opts, :telemetry_metadata, %{})
     remember_registry(registry)
 
-    instance = %{Instance.new(workflow, 1, context) | telemetry_metadata: telemetry_metadata}
+    version = Keyword.get(opts, :workflow_version, 1)
+
+    instance = %{
+      Instance.new(workflow, version, context)
+      | telemetry_metadata: telemetry_metadata
+    }
+
     :ok = storage_put(storage, instance)
 
     child_spec = %{

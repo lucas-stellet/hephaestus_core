@@ -131,12 +131,27 @@ defmodule Hephaestus do
       """
       def start_instance(workflow, context, opts \\ [])
           when is_atom(workflow) and is_map(context) do
+        {version, resolved_module} =
+          if workflow.__versioned__?() do
+            v =
+              opts[:version] ||
+                workflow.version_for(workflow.__versions__(), opts) ||
+                workflow.current_version()
+
+            workflow.resolve_version(v)
+          else
+            workflow.resolve_version(opts[:version])
+          end
+
         telemetry_metadata = Keyword.get(opts, :telemetry_metadata, %{})
 
         @hephaestus_runner_module.start_instance(
-          workflow,
+          resolved_module,
           context,
-          Keyword.merge(runner_opts(), telemetry_metadata: telemetry_metadata)
+          Keyword.merge(runner_opts(),
+            telemetry_metadata: telemetry_metadata,
+            workflow_version: version
+          )
         )
       end
 

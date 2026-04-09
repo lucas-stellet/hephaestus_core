@@ -1,7 +1,7 @@
 defmodule Hephaestus.MixProject do
   use Mix.Project
 
-  @version "0.1.5"
+  @version "0.2.0"
   @source_url "https://github.com/hephaestus-org/hephaestus_core"
 
   def project do
@@ -48,7 +48,8 @@ defmodule Hephaestus.MixProject do
         "guides/getting-started.md",
         "guides/architecture.md",
         "guides/extensions.md",
-        "guides/telemetry.md"
+        "guides/telemetry.md",
+        "guides/versioning.md"
       ],
       groups_for_extras: [
         Guides: ~r/guides\/.*/

@@ -297,6 +297,15 @@ defmodule Hephaestus.Workflow do
       (default: `1`). Used by versioned workflow registries to route instances to the
       correct module.
 
+    * `:versions` — a map of `%{version_integer => workflow_module}` that turns the
+      module into an umbrella dispatcher. Umbrella modules do **not** define `start/0`
+      or `transit/3` and skip DAG validation entirely. Instead they generate dispatcher
+      functions (`__versions__/0`, `current_version/0`, `resolve_version/1`, and
+      overridable `version_for/2`).
+
+    * `:current` — required when `:versions` is set. The version integer that
+      `resolve_version(nil)` and `current_version/0` resolve to.
+
   ## Generated Functions
 
   When you `use Hephaestus.Workflow`, the following functions are generated in your module:
@@ -327,6 +336,20 @@ defmodule Hephaestus.Workflow do
 
     * `resolve_version/1` — given `nil` or the matching version integer, returns
       `{version, module}`. Raises `ArgumentError` for any other version.
+
+  ### Umbrella-only functions (when `:versions` is set)
+
+    * `__versions__/0` — returns the version map passed via the `:versions` option.
+
+    * `current_version/0` — returns the version integer passed via the `:current` option.
+
+    * `resolve_version/1` — given `nil`, returns `{current, module}`. Given a version
+      integer present in the map, returns `{version, module}`. Raises `KeyError` for
+      unknown versions.
+
+    * `version_for/2` — receives the version map and an opts keyword list. Returns `nil`
+      by default. Can be overridden (`defoverridable`) to implement custom version
+      selection logic.
   """
 
   @dynamic_edges_attr :hephaestus_dynamic_edges
@@ -334,7 +357,13 @@ defmodule Hephaestus.Workflow do
   @doc false
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts] do
-      @behaviour Hephaestus.Core.Workflow
+      @hephaestus_versions Keyword.get(opts, :versions, nil)
+      @hephaestus_current Keyword.get(opts, :current, nil)
+
+      unless @hephaestus_versions do
+        @behaviour Hephaestus.Core.Workflow
+      end
+
       Module.register_attribute(__MODULE__, :hephaestus_dynamic_edges, accumulate: true)
       Module.register_attribute(__MODULE__, :targets, persist: false)
       @on_definition Hephaestus.Workflow
@@ -374,6 +403,60 @@ defmodule Hephaestus.Workflow do
 
   @doc false
   defmacro __before_compile__(env) do
+    versions = Module.get_attribute(env.module, :hephaestus_versions)
+
+    if versions do
+      __before_compile_umbrella__(env, versions)
+    else
+      __before_compile_standard__(env)
+    end
+  end
+
+  defp __before_compile_umbrella__(env, versions) do
+    tags = Module.get_attribute(env.module, :hephaestus_tags)
+    metadata = Module.get_attribute(env.module, :hephaestus_metadata)
+    current = Module.get_attribute(env.module, :hephaestus_current)
+
+    validate_tags!(tags)
+    validate_metadata!(metadata)
+    validate_version_keys!(versions, env)
+    validate_current!(current, versions, env)
+    validate_version_modules!(versions, env)
+    validate_version_namespace!(versions, env.module, env)
+
+    versions_ast = Macro.escape(versions)
+    metadata_ast = Macro.escape(metadata)
+
+    quote do
+      @doc false
+      def __tags__, do: unquote(tags)
+      @doc false
+      def __metadata__, do: unquote(metadata_ast)
+
+      @doc false
+      def __versions__, do: unquote(versions_ast)
+      @doc false
+      def __version__, do: nil
+      @doc false
+      def __versioned__?, do: true
+
+      @doc false
+      def current_version, do: unquote(current)
+
+      @doc false
+      def resolve_version(nil),
+        do: {unquote(current), Map.fetch!(unquote(versions_ast), unquote(current))}
+
+      def resolve_version(v), do: {v, Map.fetch!(unquote(versions_ast), v)}
+
+      @doc false
+      def version_for(_versions, _opts), do: nil
+
+      defoverridable version_for: 2
+    end
+  end
+
+  defp __before_compile_standard__(env) do
     tags = Module.get_attribute(env.module, :hephaestus_tags)
     metadata = Module.get_attribute(env.module, :hephaestus_metadata)
     version = Module.get_attribute(env.module, :hephaestus_version)
@@ -552,6 +635,83 @@ defmodule Hephaestus.Workflow do
   end
 
   defp maybe_resolve_nested_module(expanded, _ast, _env), do: expanded
+
+  # -- Umbrella validation (runs at macro expansion time) --
+
+  defp validate_version_keys!(versions, env) do
+    invalid_keys =
+      versions
+      |> Map.keys()
+      |> Enum.reject(fn k -> is_integer(k) and k > 0 end)
+
+    unless invalid_keys == [] do
+      raise CompileError,
+        file: env.file,
+        line: env.line,
+        description:
+          "all keys in :versions must be positive integer, got invalid keys: #{inspect(invalid_keys)}"
+    end
+  end
+
+  defp validate_current!(current, versions, env) do
+    unless Map.has_key?(versions, current) do
+      raise CompileError,
+        file: env.file,
+        line: env.line,
+        description:
+          ":current #{inspect(current)} is not a key in :versions (available: #{inspect(Map.keys(versions))})"
+    end
+  end
+
+  defp validate_version_modules!(versions, env) do
+    Enum.each(versions, fn {key, mod} ->
+      case Code.ensure_compiled(mod) do
+        {:module, _} ->
+          :ok
+
+        {:error, reason} ->
+          raise CompileError,
+            file: env.file,
+            line: env.line,
+            description:
+              "version module #{inspect(mod)} for key #{key} could not be compiled: #{inspect(reason)}"
+      end
+
+      unless function_exported?(mod, :__version__, 0) do
+        raise CompileError,
+          file: env.file,
+          line: env.line,
+          description:
+            "version module #{inspect(mod)} for key #{key} does not implement __version__/0"
+      end
+
+      actual_version = mod.__version__()
+
+      unless actual_version == key do
+        raise CompileError,
+          file: env.file,
+          line: env.line,
+          description:
+            "version mismatch for #{inspect(mod)}: __version__/0 returns #{inspect(actual_version)} but key is #{key}"
+      end
+    end)
+  end
+
+  defp validate_version_namespace!(versions, umbrella_module, env) do
+    umbrella_prefix = Module.split(umbrella_module)
+
+    Enum.each(versions, fn {key, mod} ->
+      mod_parts = Module.split(mod)
+
+      unless List.starts_with?(mod_parts, umbrella_prefix) do
+        raise CompileError,
+          file: env.file,
+          line: env.line,
+          description:
+            "version module #{inspect(mod)} for key #{key} must be nested under #{inspect(umbrella_module)}"
+      end
+    end)
+  end
 
   # -- Tags & metadata validation (runs at macro expansion time) --
 
