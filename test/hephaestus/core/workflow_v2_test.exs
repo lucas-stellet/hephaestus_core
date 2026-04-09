@@ -107,6 +107,16 @@ defmodule Hephaestus.Core.WorkflowV2Test do
       # Assert
       assert %Graph{} = graph
     end
+
+    test "generated internal helpers are marked @doc false in the macro source" do
+      source = File.read!("lib/hephaestus/core/workflow.ex")
+
+      assert source =~
+               "@doc false\n      def __predecessors__(module), do: Map.get(unquote(predecessors_ast), module, MapSet.new())"
+
+      assert source =~ "@doc false\n      def __graph__, do: unquote(graph_ast)"
+      assert source =~ "@doc false\n      def __edges__, do: unquote(edges_ast)"
+    end
   end
 
   describe "compile-time validation errors" do

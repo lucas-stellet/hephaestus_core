@@ -418,9 +418,18 @@ defmodule Hephaestus.Workflow do
     tags = Module.get_attribute(env.module, :hephaestus_tags)
     metadata = Module.get_attribute(env.module, :hephaestus_metadata)
     current = Module.get_attribute(env.module, :hephaestus_current)
+    explicit_version = Module.get_attribute(env.module, :hephaestus_version)
 
     validate_tags!(tags)
     validate_metadata!(metadata)
+
+    if explicit_version != 1 do
+      raise CompileError,
+        file: env.file,
+        line: env.line,
+        description: "cannot use both :version and :versions options simultaneously"
+    end
+
     validate_version_keys!(versions, env)
     validate_current!(current, versions, env)
     validate_version_modules!(versions, env)
@@ -476,6 +485,13 @@ defmodule Hephaestus.Workflow do
     validate_tags!(tags)
     validate_metadata!(metadata)
 
+    unless is_integer(version) and version > 0 do
+      raise CompileError,
+        file: env.file,
+        line: env.line,
+        description: "version: must be a positive integer, got: #{inspect(version)}"
+    end
+
     start = extract_start!(env)
 
     edges =
@@ -495,8 +511,11 @@ defmodule Hephaestus.Workflow do
       def __tags__, do: unquote(tags)
       @doc false
       def __metadata__, do: unquote(metadata_ast)
+      @doc false
       def __predecessors__(module), do: Map.get(unquote(predecessors_ast), module, MapSet.new())
+      @doc false
       def __graph__, do: unquote(graph_ast)
+      @doc false
       def __edges__, do: unquote(edges_ast)
 
       @doc false
@@ -695,6 +714,15 @@ defmodule Hephaestus.Workflow do
           line: env.line,
           description:
             "version module #{inspect(mod)} for key #{key} does not implement __version__/0"
+      end
+
+      unless function_exported?(mod, :start, 0) do
+        raise CompileError,
+          file: env.file,
+          line: env.line,
+          description:
+            "version module #{inspect(mod)} must implement Hephaestus.Core.Workflow " <>
+              "(missing start/0). Use `use Hephaestus.Workflow, version: #{key}`"
       end
 
       actual_version = mod.__version__()

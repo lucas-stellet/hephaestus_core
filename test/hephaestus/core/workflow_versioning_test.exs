@@ -62,6 +62,20 @@ defmodule Hephaestus.Core.WorkflowVersioningTest do
         ExplicitV3Flow.resolve_version(1)
       end
     end
+
+    test "raises when version: is zero" do
+      assert_raise CompileError, ~r/positive integer/, fn ->
+        Code.compile_quoted(
+          quote do
+            defmodule ZeroVersionFlow do
+              use Hephaestus.Workflow, version: 0
+              def start, do: Hephaestus.Test.V2.StepA
+              def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: Hephaestus.Steps.Done
+            end
+          end
+        )
+      end
+    end
   end
 
   defmodule Umbrella.V1 do
@@ -132,6 +146,21 @@ defmodule Hephaestus.Core.WorkflowVersioningTest do
   end
 
   describe "umbrella compile-time validations" do
+    test "raises when version: and versions: used together" do
+      assert_raise CompileError, ~r/cannot use both/, fn ->
+        Code.compile_quoted(
+          quote do
+            defmodule BothOptsFlow do
+              use Hephaestus.Workflow,
+                version: 5,
+                versions: %{1 => Hephaestus.Test.V2.LinearWorkflow},
+                current: 1
+            end
+          end
+        )
+      end
+    end
+
     test "raises when versions key is not a positive integer" do
       assert_raise CompileError, ~r/positive integer/, fn ->
         Code.compile_quoted(
@@ -193,6 +222,24 @@ defmodule Hephaestus.Core.WorkflowVersioningTest do
             defmodule NSUmbrella do
               use Hephaestus.Workflow,
                 versions: %{1 => Hephaestus.Core.WorkflowVersioningTest.OutsideNS},
+                current: 1
+            end
+          end
+        )
+      end
+    end
+
+    test "raises when version module doesn't implement behaviour" do
+      defmodule FakeVersionModule do
+        def __version__, do: 1
+      end
+
+      assert_raise CompileError, ~r/must implement.*start/, fn ->
+        Code.compile_quoted(
+          quote do
+            defmodule Hephaestus.Core.WorkflowVersioningTest.FakeBehaviourUmbrella do
+              use Hephaestus.Workflow,
+                versions: %{1 => Hephaestus.Core.WorkflowVersioningTest.FakeVersionModule},
                 current: 1
             end
           end
