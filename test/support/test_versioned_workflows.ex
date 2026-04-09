@@ -52,7 +52,5 @@ defmodule Hephaestus.Test.VersionedWithCallback do
     },
     current: 2
 
-  def version_for(_versions, opts) do
-    if opts[:force_v1], do: 1
-  end
+  def version_for(%{1 => _}, force_v1: true), do: 1
 end

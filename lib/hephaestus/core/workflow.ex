@@ -348,8 +348,10 @@ defmodule Hephaestus.Workflow do
       for unknown versions.
 
     * `version_for/2` — receives the version map and an opts keyword list. Returns `nil`
-      by default. Can be overridden (`defoverridable`) to implement custom version
-      selection logic.
+      by default. The opts keyword list is forwarded from `start_instance/3` as-is.
+      The core reserves `:version` and `:telemetry_metadata`, so custom routing
+      should avoid those keys. Can be overridden (`defoverridable`) to implement
+      custom version selection logic.
   """
 
   @dynamic_edges_attr :hephaestus_dynamic_edges

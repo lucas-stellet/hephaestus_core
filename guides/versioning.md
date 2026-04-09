@@ -121,6 +121,8 @@ Override `version_for/2` in the umbrella module to implement runtime routing log
 - `opts` --- the keyword list passed to `start_instance/3`, forwarded as-is
 
 Return an integer to select that version, or `nil` to fall through to the compile default.
+The core reserves `:version` and `:telemetry_metadata`, so avoid those keys for
+custom routing data.
 
 ### Tenant-based routing
 
