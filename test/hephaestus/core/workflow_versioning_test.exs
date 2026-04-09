@@ -107,8 +107,8 @@ defmodule Hephaestus.Core.WorkflowVersioningTest do
       assert Umbrella.resolve_version(1) == {1, Umbrella.V1}
     end
 
-    test "resolve_version(99) raises KeyError" do
-      assert_raise KeyError, fn ->
+    test "resolve_version(99) raises ArgumentError" do
+      assert_raise ArgumentError, ~r/version 99 not found/, fn ->
         Umbrella.resolve_version(99)
       end
     end

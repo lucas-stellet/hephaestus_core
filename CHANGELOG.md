@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Breaking:** `Instance.new/2` replaced by `Instance.new/3` — all callers must pass a version argument.
+- `Instance.new/3` added with a version parameter. Existing `new/2` signatures are preserved for backward compatibility.
 
 ## [0.1.5] - 2026-04-08
 

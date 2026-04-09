@@ -34,6 +34,12 @@ defmodule Hephaestus.VersionedWorkflowIntegrationTest do
       assert instance.workflow_version == 1
     end
 
+    test "raises ArgumentError for non-existent version" do
+      assert_raise ArgumentError, fn ->
+        Hephaestus.Test.Hephaestus.start_instance(Hephaestus.Test.Versioned, %{}, version: 99)
+      end
+    end
+
     test "version_for/2 callback resolves version" do
       {:ok, id} =
         Hephaestus.Test.Hephaestus.start_instance(

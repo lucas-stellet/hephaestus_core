@@ -332,7 +332,7 @@ defmodule Hephaestus.Workflow do
     * `__version__/0` — returns the workflow version as a positive integer (default: `1`).
 
     * `__versioned__?/0` — returns `false` for standalone workflows. Versioned workflow
-      registries (see Task 004) override this to return `true`.
+      umbrella workflow modules override this to return `true`.
 
     * `resolve_version/1` — given `nil` or the matching version integer, returns
       `{version, module}`. Raises `ArgumentError` for any other version.
@@ -344,8 +344,8 @@ defmodule Hephaestus.Workflow do
     * `current_version/0` — returns the version integer passed via the `:current` option.
 
     * `resolve_version/1` — given `nil`, returns `{current, module}`. Given a version
-      integer present in the map, returns `{version, module}`. Raises `KeyError` for
-      unknown versions.
+      integer present in the map, returns `{version, module}`. Raises `ArgumentError`
+      for unknown versions.
 
     * `version_for/2` — receives the version map and an opts keyword list. Returns `nil`
       by default. Can be overridden (`defoverridable`) to implement custom version
@@ -447,7 +447,17 @@ defmodule Hephaestus.Workflow do
       def resolve_version(nil),
         do: {unquote(current), Map.fetch!(unquote(versions_ast), unquote(current))}
 
-      def resolve_version(v), do: {v, Map.fetch!(unquote(versions_ast), v)}
+      def resolve_version(v) when is_integer(v) do
+        case Map.fetch(unquote(versions_ast), v) do
+          {:ok, module} ->
+            {v, module}
+
+          :error ->
+            raise ArgumentError,
+                  "version #{v} not found for #{inspect(__MODULE__)}. Available: " <>
+                    inspect(Map.keys(unquote(versions_ast)) |> Enum.sort())
+        end
+      end
 
       @doc false
       def version_for(_versions, _opts), do: nil
