@@ -293,6 +293,10 @@ defmodule Hephaestus.Workflow do
       Atom keys are rejected because they lose identity after JSON round-tripping in
       adapters like Oban.
 
+    * `:version` — a positive integer identifying this workflow definition version
+      (default: `1`). Used by versioned workflow registries to route instances to the
+      correct module.
+
   ## Generated Functions
 
   When you `use Hephaestus.Workflow`, the following functions are generated in your module:
@@ -315,6 +319,14 @@ defmodule Hephaestus.Workflow do
       edge is a map with `:from`, `:event`, `:targets`, and `:dynamic?` keys. Used by
       tooling (e.g., `mix hephaestus.gen.docs`) to render event-annotated workflow
       diagrams.
+
+    * `__version__/0` — returns the workflow version as a positive integer (default: `1`).
+
+    * `__versioned__?/0` — returns `false` for standalone workflows. Versioned workflow
+      registries (see Task 004) override this to return `true`.
+
+    * `resolve_version/1` — given `nil` or the matching version integer, returns
+      `{version, module}`. Raises `ArgumentError` for any other version.
   """
 
   @dynamic_edges_attr :hephaestus_dynamic_edges
@@ -330,6 +342,7 @@ defmodule Hephaestus.Workflow do
 
       @hephaestus_tags Keyword.get(opts, :tags, [])
       @hephaestus_metadata Keyword.get(opts, :metadata, %{})
+      @hephaestus_version Keyword.get(opts, :version, 1)
     end
   end
 
@@ -363,6 +376,7 @@ defmodule Hephaestus.Workflow do
   defmacro __before_compile__(env) do
     tags = Module.get_attribute(env.module, :hephaestus_tags)
     metadata = Module.get_attribute(env.module, :hephaestus_metadata)
+    version = Module.get_attribute(env.module, :hephaestus_version)
 
     validate_tags!(tags)
     validate_metadata!(metadata)
@@ -389,6 +403,21 @@ defmodule Hephaestus.Workflow do
       def __predecessors__(module), do: Map.get(unquote(predecessors_ast), module, MapSet.new())
       def __graph__, do: unquote(graph_ast)
       def __edges__, do: unquote(edges_ast)
+
+      @doc false
+      def __version__, do: unquote(version)
+      @doc false
+      def __versioned__?, do: false
+
+      @doc false
+      def resolve_version(nil), do: {unquote(version), __MODULE__}
+      def resolve_version(v) when v == unquote(version), do: {v, __MODULE__}
+
+      def resolve_version(v) do
+        raise ArgumentError,
+              "#{inspect(__MODULE__)} is not a versioned workflow; " <>
+                "it only supports version #{unquote(version)}, got: #{inspect(v)}"
+      end
     end
   end
 
