@@ -46,7 +46,9 @@ defmodule Hephaestus.TelemetryTest do
   end
 
   describe "workflow_start/2" do
-    test "emits workflow start event with system_time and instance metadata", %{instance: instance} do
+    test "emits workflow start event with system_time and instance metadata", %{
+      instance: instance
+    } do
       Telemetry.workflow_start(instance, %{initial_step: StepA, runner: Local})
 
       assert_receive {:telemetry_event, [:hephaestus, :workflow, :start], measurements, metadata}
@@ -62,6 +64,14 @@ defmodule Hephaestus.TelemetryTest do
 
       assert_receive {:telemetry_event, [:hephaestus, :workflow, :start], _measurements, metadata}
       assert metadata.request_id == "req-123"
+    end
+
+    test "metadata includes workflow_version", %{instance: instance} do
+      instance = %{instance | workflow_version: 3}
+      Telemetry.workflow_start(instance, %{runner: Local})
+
+      assert_receive {:telemetry_event, [:hephaestus, :workflow, :start], _measurements, metadata}
+      assert metadata.workflow_version == 3
     end
 
     test "hephaestus fields cannot be overridden by telemetry_metadata" do
@@ -111,7 +121,8 @@ defmodule Hephaestus.TelemetryTest do
       instance = %Instance{
         id: "future-start",
         workflow: MyTestWorkflow,
-        telemetry_start_time: System.monotonic_time() + System.convert_time_unit(1, :second, :native)
+        telemetry_start_time:
+          System.monotonic_time() + System.convert_time_unit(1, :second, :native)
       }
 
       Telemetry.workflow_stop(instance, %{step_count: 0, advance_count: 0, runner: Local})
@@ -130,7 +141,9 @@ defmodule Hephaestus.TelemetryTest do
         runner: Local
       })
 
-      assert_receive {:telemetry_event, [:hephaestus, :workflow, :exception], measurements, metadata}
+      assert_receive {:telemetry_event, [:hephaestus, :workflow, :exception], measurements,
+                      metadata}
+
       assert is_integer(measurements.duration) or measurements.duration == nil
       assert metadata.kind == :error
       assert metadata.reason == :step_failed
@@ -217,7 +230,9 @@ defmodule Hephaestus.TelemetryTest do
     test "emits transition with targets and fan_out flag", %{instance: instance} do
       Telemetry.workflow_transition(instance, StepA, :done, [StepB, StepC], %{})
 
-      assert_receive {:telemetry_event, [:hephaestus, :workflow, :transition], measurements, metadata}
+      assert_receive {:telemetry_event, [:hephaestus, :workflow, :transition], measurements,
+                      metadata}
+
       assert measurements.targets_count == 2
       assert metadata.from_step == StepA
       assert metadata.event == :done
@@ -228,7 +243,9 @@ defmodule Hephaestus.TelemetryTest do
     test "fan_out is false for single target", %{instance: instance} do
       Telemetry.workflow_transition(instance, StepA, :done, [StepB], %{})
 
-      assert_receive {:telemetry_event, [:hephaestus, :workflow, :transition], _measurements, metadata}
+      assert_receive {:telemetry_event, [:hephaestus, :workflow, :transition], _measurements,
+                      metadata}
+
       assert metadata.fan_out == false
     end
   end

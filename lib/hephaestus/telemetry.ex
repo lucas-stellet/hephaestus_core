@@ -468,6 +468,7 @@ defmodule Hephaestus.Telemetry do
     instance.telemetry_metadata
     |> Map.merge(extra_metadata)
     |> Map.merge(hephaestus_fields)
+    |> Map.put(:workflow_version, instance.workflow_version)
   end
 
   defp safe_duration(nil), do: nil
