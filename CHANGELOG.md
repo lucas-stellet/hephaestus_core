@@ -12,13 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Workflow versioning: all workflows now have an implicit version (default `1`).
 - `version:` option for `use Hephaestus.Workflow` to declare explicit version numbers.
 - `versions:` and `current:` options for umbrella workflow modules (version dispatchers).
-- Generated functions on umbrella modules: `__versions__/0`, `current_version/0`, `resolve_version/1`, and overridable `version_for/2`.
+- Generated functions on umbrella modules: `__versions__/0`, `current_version/0`, `resolve_version/1`, overridable `version_for/2`, and `__version__/0` returning `nil`.
+- Umbrella modules do not generate DAG helper functions such as `__graph__/0`, `__edges__/0`, or `__predecessors__/1`.
 - Generated functions on all workflows: `__version__/0`, `__versioned__?/0`, `resolve_version/1`.
 - `workflow_version` field on `Hephaestus.Core.Instance` (positive integer, default `1`).
 - `Instance.new/3` accepting `(workflow, version, context)` with guard rejecting non-positive versions.
 - `workflow_version` included in all telemetry event metadata for observability of which version is running.
 - Version resolution chain in `start_instance/3`: `opts[:version]` (explicit) -> `version_for/2` callback (umbrella only) -> `current_version/0` (compile default). Non-versioned workflows skip the chain and call `resolve_version/1` directly.
-- Compile-time validations for umbrella workflow modules: positive integer keys, `current` in `versions`, `__version__/0` match, and namespace nesting enforcement.
+- Compile-time validations for umbrella workflow modules: `version:` cannot be combined with `versions:`, version keys must be positive integers, `current` must be present in `versions`, version modules must implement `Hephaestus.Core.Workflow`, `__version__/0` must match the version key, and version modules must be nested under the umbrella namespace.
 - Workflow Versioning guide (`guides/versioning.md`).
 
 ### Changed

@@ -52,7 +52,7 @@ Add to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:hephaestus, "~> 0.1.3"},
+    {:hephaestus, "~> 0.2.0"},
     {:hephaestus_ecto, "~> 0.1.0"}
   ]
 end
@@ -77,6 +77,9 @@ end
 
 Everything else stays the same — your workflows, steps, and supervision tree
 don't change. Instances are now persisted to PostgreSQL instead of ETS.
+
+Workflow versioning in `hephaestus` 0.2.x does not require a new Ecto migration:
+the resolved `workflow_version` is stored inside the serialized instance state.
 
 ### Querying instances
 
@@ -156,7 +159,7 @@ Add to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:hephaestus, "~> 0.1.3"},
+    {:hephaestus, "~> 0.2.0"},
     {:hephaestus_ecto, "~> 0.1.0"},
     {:hephaestus_oban, "~> 0.1.0"}
   ]
@@ -199,6 +202,9 @@ The `hephaestus: 10` queue configuration means up to 10 Oban jobs run
 concurrently. In a fan-out of 20 steps, only 10 execute at once — the rest wait
 in the queue. Adjust based on your workload.
 
+Workflow versioning also requires no extra Oban migration. The runner reads the
+resolved workflow module and `workflow_version` from the serialized instance state.
+
 For fine-grained control, use separate queues for orchestration and execution:
 
 ```elixir
@@ -220,7 +226,7 @@ complete setup:
 # mix.exs
 def deps do
   [
-    {:hephaestus, "~> 0.1.5"},
+    {:hephaestus, "~> 0.2.0"},
     {:hephaestus_ecto, "~> 0.1.0"},
     {:hephaestus_oban, "~> 0.1.0"}
   ]

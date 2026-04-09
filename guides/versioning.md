@@ -74,11 +74,15 @@ The umbrella does not define `start/0` or `transit/3`. It generates dispatcher f
 
 | Function | Description |
 |---|---|
+| `__version__/0` | Returns `nil` because the umbrella is a dispatcher, not a concrete workflow version |
 | `__versions__/0` | Returns the `%{integer => module}` version map |
 | `__versioned__?/0` | Returns `true` |
 | `current_version/0` | Returns the compile-time default version number |
 | `resolve_version/1` | Maps a version integer (or `nil`) to `{version, module}` |
 | `version_for/2` | Overridable callback for dynamic version resolution |
+
+Umbrella modules do not generate DAG helper functions such as `__graph__/0`,
+`__edges__/0`, or `__predecessors__/1`; those belong to concrete workflow versions.
 
 ### Step 3: Start instances through the umbrella
 
@@ -101,19 +105,24 @@ The umbrella does not define `start/0` or `transit/3`. It generates dispatcher f
 
 The umbrella module enforces these rules at compile time:
 
-1. All keys in `versions` are positive integers.
-2. All referenced modules implement the `Hephaestus.Core.Workflow` behaviour.
-3. Each module's `__version__/0` matches its key in the `versions` map.
-4. `current` is a key present in the `versions` map.
-5. Version modules are nested under the umbrella module namespace (e.g., `CreateUser.V1`, `CreateUser.V2`).
+1. `version:` and `versions:` cannot be used together.
+2. All keys in `versions` are positive integers.
+3. All referenced modules implement the `Hephaestus.Core.Workflow` behaviour.
+4. Each module's `__version__/0` matches its key in the `versions` map.
+5. `current` is a key present in the `versions` map.
+6. Version modules are nested under the umbrella module namespace (e.g., `CreateUser.V1`, `CreateUser.V2`).
 
 ## Dynamic Version Resolution
 
 The umbrella module supports a three-step resolution chain when `start_instance/3` is called:
 
 1. **Explicit** --- `opts[:version]` if the caller passes `version: N`.
-2. **Dynamic callback** --- `version_for/2` if the umbrella overrides it.
+2. **Dynamic callback** --- `version_for/2` if the umbrella overrides it and no explicit version was passed.
 3. **Compile default** --- `current_version/0` as the final fallback.
+
+For non-versioned workflows, `start_instance/3` skips this chain and calls
+`resolve_version(opts[:version])` directly. That means `version: nil` and the
+matching workflow version are accepted, while any other version raises `ArgumentError`.
 
 Override `version_for/2` in the umbrella module to implement runtime routing logic. The callback receives two arguments:
 

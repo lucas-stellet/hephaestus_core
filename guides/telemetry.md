@@ -13,7 +13,7 @@ Hephaestus includes `:telemetry` automatically. No extra dependencies are needed
 ```elixir
 def deps do
   [
-    {:hephaestus, "~> 0.1.5"}
+    {:hephaestus, "~> 0.2.0"}
   ]
 end
 ```
@@ -51,31 +51,33 @@ Every log line includes the `instance_id` as a prefix and structured metadata fi
 ## Events Reference
 
 Hephaestus emits 11 events organized into two spans and five standalone events.
+All instance-scoped events also include `workflow_version` in their metadata, plus
+any caller-supplied `telemetry_metadata` fields passed to `start_instance/3`.
 
 ### Workflow Span
 
 | Event Name | Measurements | Metadata |
 |---|---|---|
-| `[:hephaestus, :workflow, :start]` | `system_time` | `instance_id`, `workflow`, `initial_step`, `context_keys`, `runner` |
-| `[:hephaestus, :workflow, :stop]` | `duration`, `step_count`, `advance_count` | `instance_id`, `workflow`, `status` (`:completed`), `completed_steps`, `runner` |
-| `[:hephaestus, :workflow, :exception]` | `duration`, `step_count`, `advance_count` | `instance_id`, `workflow`, `status` (`:failed`), `failed_step`, `reason`, `kind`, `stacktrace`, `runner` |
+| `[:hephaestus, :workflow, :start]` | `system_time` | `instance_id`, `workflow`, `workflow_version`, `initial_step`, `context_keys`, `runner` |
+| `[:hephaestus, :workflow, :stop]` | `duration`, `step_count`, `advance_count` | `instance_id`, `workflow`, `workflow_version`, `status` (`:completed`), `completed_steps`, `runner` |
+| `[:hephaestus, :workflow, :exception]` | `duration` | `instance_id`, `workflow`, `workflow_version`, `status` (`:failed`), `failed_step`, `reason`, `kind`, `stacktrace`, `runner` |
 
 ### Step Span
 
 | Event Name | Measurements | Metadata |
 |---|---|---|
-| `[:hephaestus, :step, :start]` | `system_time` | `instance_id`, `workflow`, `step`, `step_key`, `concurrent`, `active_steps_count` |
-| `[:hephaestus, :step, :stop]` | `duration` | `instance_id`, `workflow`, `step`, `step_key`, `event`, `has_context_updates`, `has_metadata_updates`, `transitions_to` |
-| `[:hephaestus, :step, :exception]` | `duration` | `instance_id`, `workflow`, `step`, `step_key`, `kind`, `reason`, `stacktrace` |
+| `[:hephaestus, :step, :start]` | `system_time` | `instance_id`, `workflow`, `workflow_version`, `step`, `step_key`, `concurrent`, `active_steps_count` |
+| `[:hephaestus, :step, :stop]` | `duration` | `instance_id`, `workflow`, `workflow_version`, `step`, `step_key`, `event`, `has_context_updates`, `has_metadata_updates`, `transitions_to` |
+| `[:hephaestus, :step, :exception]` | `duration` | `instance_id`, `workflow`, `workflow_version`, `step`, `step_key`, `kind`, `reason`, `stacktrace` |
 
 ### Standalone Events
 
 | Event Name | Measurements | Metadata |
 |---|---|---|
-| `[:hephaestus, :step, :async]` | `duration` | `instance_id`, `workflow`, `step`, `step_key`, `instance_status` (`:waiting`) |
-| `[:hephaestus, :step, :resume]` | `system_time`, `wait_duration` | `instance_id`, `workflow`, `step`, `step_key`, `resume_event`, `source` |
-| `[:hephaestus, :workflow, :transition]` | `system_time`, `targets_count` | `instance_id`, `workflow`, `from_step`, `event`, `targets`, `fan_out` |
-| `[:hephaestus, :engine, :advance]` | `duration`, `active_steps_count`, `completed_in_advance` | `instance_id`, `workflow`, `status_before`, `status_after`, `iteration` |
+| `[:hephaestus, :step, :async]` | `duration` | `instance_id`, `workflow`, `workflow_version`, `step`, `step_key`, `instance_status` (`:waiting`) |
+| `[:hephaestus, :step, :resume]` | `system_time`, `wait_duration` | `instance_id`, `workflow`, `workflow_version`, `step`, `step_key`, `resume_event`, `source` |
+| `[:hephaestus, :workflow, :transition]` | `system_time`, `targets_count` | `instance_id`, `workflow`, `workflow_version`, `from_step`, `event`, `targets`, `fan_out` |
+| `[:hephaestus, :engine, :advance]` | `duration`, `active_steps_count`, `completed_in_advance` | `instance_id`, `workflow`, `workflow_version`, `status_before`, `status_after`, `iteration` |
 | `[:hephaestus, :runner, :init]` | `system_time` | `name`, `runner`, `storage`, `pid` |
 
 All `duration` values are in Erlang native time units. Convert with `System.convert_time_unit(duration, :native, :millisecond)`.

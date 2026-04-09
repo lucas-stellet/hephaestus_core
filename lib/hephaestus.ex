@@ -27,13 +27,14 @@ defmodule Hephaestus do
   The generated module exposes:
 
     * `start_instance/2` - starts a workflow instance
-    * `start_instance/3` - starts a workflow instance with options (e.g. telemetry metadata)
+    * `start_instance/3` - starts a workflow instance with options (e.g. telemetry metadata, explicit workflow version)
     * `resume/2` - resumes a waiting workflow instance
 
   ## Example
 
       {:ok, id} = MyApp.Hephaestus.start_instance(MyApp.Workflows.OrderFlow, %{order_id: 123})
       {:ok, id} = MyApp.Hephaestus.start_instance(MyApp.Workflows.OrderFlow, %{order_id: 123}, telemetry_metadata: %{request_id: "req-123"})
+      {:ok, id} = MyApp.Hephaestus.start_instance(MyApp.Workflows.OrderFlow, %{order_id: 123}, version: 2)
       :ok = MyApp.Hephaestus.resume(id, :payment_confirmed)
 
   ## Options
@@ -119,8 +120,20 @@ defmodule Hephaestus do
       @doc """
       Starts a workflow instance through the configured runner.
 
+      For umbrella workflows declared with `use Hephaestus.Workflow, versions: ...`,
+      version resolution happens in this order:
+
+        1. `opts[:version]`
+        2. `workflow.version_for(workflow.__versions__(), opts)`
+        3. `workflow.current_version()`
+
+      Non-versioned workflows skip the callback chain and validate `opts[:version]`
+      directly through `resolve_version/1`.
+
       ## Options
 
+        * `:version` - explicit workflow version override. For non-versioned workflows,
+          this must be `nil` or the workflow's declared version.
         * `:telemetry_metadata` - a map of custom metadata to attach to all
           telemetry events emitted for this instance (default: `%{}`)
 
@@ -128,6 +141,7 @@ defmodule Hephaestus do
 
           {:ok, instance_id} = MyApp.Hephaestus.start_instance(MyApp.Workflows.OrderFlow, %{order_id: 123})
           {:ok, instance_id} = MyApp.Hephaestus.start_instance(MyApp.Workflows.OrderFlow, %{order_id: 123}, telemetry_metadata: %{request_id: "req-456"})
+          {:ok, instance_id} = MyApp.Hephaestus.start_instance(MyApp.Workflows.OrderFlow, %{order_id: 123}, version: 2)
       """
       def start_instance(workflow, context, opts \\ [])
           when is_atom(workflow) and is_map(context) do

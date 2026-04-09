@@ -330,9 +330,10 @@ defmodule Hephaestus.Workflow do
       diagrams.
 
     * `__version__/0` — returns the workflow version as a positive integer (default: `1`).
+      Umbrella dispatcher modules instead return `nil`.
 
-    * `__versioned__?/0` — returns `false` for standalone workflows. Versioned workflow
-      umbrella workflow modules override this to return `true`.
+    * `__versioned__?/0` — returns `false` for standalone workflows. Version-dispatcher
+      umbrella modules override this to return `true`.
 
     * `resolve_version/1` — given `nil` or the matching version integer, returns
       `{version, module}`. Raises `ArgumentError` for any other version.
@@ -348,10 +349,27 @@ defmodule Hephaestus.Workflow do
       for unknown versions.
 
     * `version_for/2` — receives the version map and an opts keyword list. Returns `nil`
-      by default. The opts keyword list is forwarded from `start_instance/3` as-is.
+      by default. The opts keyword list is forwarded from `start_instance/3` as-is,
+      but the callback is only consulted when no explicit `opts[:version]` was passed.
       The core reserves `:version` and `:telemetry_metadata`, so custom routing
       should avoid those keys. Can be overridden (`defoverridable`) to implement
       custom version selection logic.
+
+  ## Validation Rules
+
+  Standard workflows validate `:version` as a positive integer.
+
+  Umbrella workflows additionally validate that:
+
+    * `:version` and `:versions` are not used together
+    * every key in `:versions` is a positive integer
+    * `:current` is present in `:versions`
+    * every referenced version module implements `Hephaestus.Core.Workflow`
+    * every referenced version module reports the same `__version__/0` as its map key
+    * every referenced version module is nested under the umbrella module namespace
+
+  Umbrella modules are dispatchers, so they do not generate DAG helper functions like
+  `__graph__/0`, `__edges__/0`, or `__predecessors__/1`.
   """
 
   @dynamic_edges_attr :hephaestus_dynamic_edges

@@ -18,6 +18,8 @@ defmodule Hephaestus.Core.Instance do
     * `active_steps` - `MapSet` of step modules currently being executed
     * `completed_steps` - `MapSet` of step modules that have finished
     * `runtime_metadata` - dynamic metadata accumulated from step executions
+    * `telemetry_metadata` - caller metadata merged into emitted telemetry events
+    * `telemetry_start_time` - monotonic start time used to compute telemetry durations
     * `execution_history` - list of `Hephaestus.Core.ExecutionEntry` records
   """
 
@@ -65,6 +67,12 @@ defmodule Hephaestus.Core.Instance do
 
   Generates a UUID v4 identifier and initializes the instance with a `:pending`
   status and the provided initial context.
+
+  Constructor overloads:
+
+    * `new/1` — defaults version to `1` and context to `%{}`
+    * `new/2` — accepts either `(workflow, context)` or `(workflow, version)`
+    * `new/3` — accepts `(workflow, version, context)`
 
   ## Parameters
 

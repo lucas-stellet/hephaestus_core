@@ -14,7 +14,7 @@ Add `hephaestus` to your `mix.exs` dependencies:
 ```elixir
 def deps do
   [
-    {:hephaestus, "~> 0.1.3"}
+    {:hephaestus, "~> 0.2.0"}
   ]
 end
 ```
@@ -132,6 +132,9 @@ This starts a Registry, DynamicSupervisor, TaskSupervisor, and the ETS storage a
 ```
 
 The second argument is the initial context — it's available to all steps via `context.initial`.
+
+If you later introduce workflow versioning, `start_instance/3` also accepts
+`version: <positive_integer>` for an explicit version override.
 
 ## Handling async steps and resume
 
