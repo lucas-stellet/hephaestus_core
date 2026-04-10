@@ -182,6 +182,7 @@ defmodule Hephaestus do
 
       defp runner_opts do
         [
+          config_key: __MODULE__,
           storage: {@hephaestus_storage_module, Module.concat(__MODULE__, Storage)},
           registry: Module.concat(__MODULE__, Registry),
           dynamic_supervisor: Module.concat(__MODULE__, DynamicSupervisor),
