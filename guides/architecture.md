@@ -70,7 +70,7 @@ a point in time:
 
 | Field               | Type                  | Purpose                                     |
 |---------------------|-----------------------|---------------------------------------------|
-| `id`                | UUID v4 string        | Unique identifier                            |
+| `id`                | string                | Caller-supplied unique identifier            |
 | `workflow`          | module                | The workflow module being executed            |
 | `workflow_version`  | positive integer      | Resolved workflow definition version          |
 | `status`            | atom                  | Lifecycle state (see below)                  |
@@ -84,11 +84,9 @@ a point in time:
 | `telemetry_start_time` | integer or nil     | Monotonic start time for duration telemetry   |
 | `execution_history` | list of ExecutionEntry| Audit trail                                  |
 
-Instances are created via `Instance.new/1`, `new/2`, or `new/3`. The versioned
-constructor is `Instance.new(workflow, version, context)`, while the older
-arity-1/2 overloads remain as convenience wrappers that default the version to
-`1`. Instances are plain structs — the Instance module has no process or side
-effect.
+Instances are created via `Instance.new/4`, which requires the workflow module,
+resolved version, initial context, and an explicit instance ID. Instances are
+plain structs — the Instance module has no process or side effect.
 
 ### Context (`Hephaestus.Core.Context`)
 
@@ -178,7 +176,7 @@ complete. Contains `step_ref`, `event`, `timestamp`, and optional
 ## Workflow lifecycle
 
 ```
-                      Instance.new/1-3
+                      Instance.new/4
                             |
                             v
                        +---------+

@@ -3,59 +3,70 @@ defmodule Hephaestus.Core.InstanceTest do
 
   alias Hephaestus.Core.{Context, Instance}
 
-  describe "new/3" do
-    test "creates instance with workflow module and context" do
+  describe "new/4" do
+    test "creates instance with explicit ID" do
       workflow = MyTestWorkflow
-      context = %{order_id: 123}
+      id = "orderid::abc123"
 
-      instance = Instance.new(workflow, 1, context)
+      instance = Instance.new(workflow, 1, %{order_id: 123}, id)
 
       assert %Instance{
+               id: "orderid::abc123",
                workflow: MyTestWorkflow,
-               status: :pending,
-               active_steps: active,
-               completed_steps: completed
+               workflow_version: 1,
+               status: :pending
              } = instance
 
-      assert is_binary(instance.id)
       assert %Context{initial: %{order_id: 123}} = instance.context
-      assert MapSet.size(active) == 0
-      assert MapSet.size(completed) == 0
+    end
+
+    test "preserves the exact ID provided" do
+      id = "blueprintid::550e8400-e29b-41d4-a716-446655440000"
+
+      instance = Instance.new(MyTestWorkflow, 1, %{}, id)
+
+      assert instance.id == "blueprintid::550e8400-e29b-41d4-a716-446655440000"
+    end
+
+    test "initializes with empty active and completed steps" do
+      instance = Instance.new(MyTestWorkflow, 1, %{}, "test::init")
+
+      assert MapSet.size(instance.active_steps) == 0
+      assert MapSet.size(instance.completed_steps) == 0
       assert instance.execution_history == []
     end
 
-    test "generates unique ids" do
-      instance_a = Instance.new(MyTestWorkflow, 1, %{})
-      instance_b = Instance.new(MyTestWorkflow, 1, %{})
+    test "sets workflow version" do
+      instance = Instance.new(MyTestWorkflow, 3, %{}, "test::v3")
 
-      refute instance_a.id == instance_b.id
+      assert instance.workflow_version == 3
     end
 
-    test "creates instance with default empty context" do
-      instance = Instance.new(MyTestWorkflow, 1)
+    test "initializes telemetry fields with defaults" do
+      instance = Instance.new(MyTestWorkflow, 1, %{}, "test::telem")
 
-      assert %Context{initial: %{}, steps: %{}} = instance.context
+      assert instance.telemetry_metadata == %{}
+      assert instance.telemetry_start_time == nil
     end
   end
 
-  describe "telemetry fields" do
-    test "new/3 creates instance with default telemetry_metadata as empty map" do
-      instance = Instance.new(MyTestWorkflow, 1, %{order_id: 1})
-
-      assert Map.get(instance, :telemetry_metadata) == %{}
+  describe "new/4 guards" do
+    test "rejects non-binary ID" do
+      assert_raise FunctionClauseError, fn ->
+        apply(Instance, :new, [MyTestWorkflow, 1, %{}, 123])
+      end
     end
 
-    test "new/3 creates instance with default telemetry_start_time as nil" do
-      instance = Instance.new(MyTestWorkflow, 1, %{})
-
-      assert Map.get(instance, :telemetry_start_time) == nil
+    test "rejects non-atom workflow" do
+      assert_raise FunctionClauseError, fn ->
+        apply(Instance, :new, ["NotAModule", 1, %{}, "test::guard"])
+      end
     end
 
-    test "telemetry_metadata can be set after creation" do
-      instance = Instance.new(MyTestWorkflow, 1, %{})
-      updated = Map.put(instance, :telemetry_metadata, %{request_id: "abc-123"})
-
-      assert Map.get(updated, :telemetry_metadata) == %{request_id: "abc-123"}
+    test "rejects zero version" do
+      assert_raise FunctionClauseError, fn ->
+        apply(Instance, :new, [MyTestWorkflow, 0, %{}, "test::guard"])
+      end
     end
   end
 end

@@ -7,9 +7,13 @@ defmodule Hephaestus.Steps.DoneTest do
   defmodule TestWorkflow do
   end
 
+  defp new_instance do
+    Instance.new(TestWorkflow, 1, %{}, "done-test-#{System.unique_integer([:positive])}")
+  end
+
   describe "execute/3" do
     test "returns done event" do
-      instance = Instance.new(TestWorkflow, 1, %{})
+      instance = new_instance()
       context = Context.new(%{order_id: 123})
 
       result = Done.execute(instance, nil, context)
@@ -18,7 +22,7 @@ defmodule Hephaestus.Steps.DoneTest do
     end
 
     test "ignores config" do
-      instance = Instance.new(TestWorkflow, 1, %{})
+      instance = new_instance()
       context = Context.new(%{})
 
       result = Done.execute(instance, %{some: "config"}, context)

@@ -9,9 +9,18 @@ defmodule Hephaestus.Steps.DebugTest do
   defmodule TestWorkflow do
   end
 
+  defp new_instance(context \\ %{}) do
+    Instance.new(
+      TestWorkflow,
+      1,
+      context,
+      "debug-test-#{System.unique_integer([:positive])}"
+    )
+  end
+
   describe "execute/3" do
     test "returns completed atom event" do
-      instance = Instance.new(TestWorkflow, 1, %{order_id: 123})
+      instance = new_instance(%{order_id: 123})
       context = Context.new(%{order_id: 123})
 
       result =
@@ -23,7 +32,7 @@ defmodule Hephaestus.Steps.DebugTest do
     end
 
     test "logs context initial data" do
-      instance = Instance.new(TestWorkflow, 1, %{order_id: 123})
+      instance = new_instance(%{order_id: 123})
       context = Context.new(%{order_id: 123})
 
       log =
@@ -36,7 +45,7 @@ defmodule Hephaestus.Steps.DebugTest do
     end
 
     test "logs step results from context" do
-      instance = Instance.new(TestWorkflow, 1, %{})
+      instance = new_instance()
 
       context =
         Context.new(%{})
@@ -58,7 +67,7 @@ defmodule Hephaestus.Steps.DebugTest do
         timestamp: ~U[2026-01-01 00:00:00Z]
       }
 
-      instance = %{Instance.new(TestWorkflow, 1, %{}) | execution_history: [entry]}
+      instance = %{new_instance() | execution_history: [entry]}
       context = Context.new(%{})
 
       log =

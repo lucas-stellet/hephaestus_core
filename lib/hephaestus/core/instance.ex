@@ -8,7 +8,7 @@ defmodule Hephaestus.Core.Instance do
 
   ## Fields
 
-    * `id` - unique identifier (UUID v4)
+    * `id` - unique identifier supplied by the caller
     * `workflow` - the workflow module being executed
     * `workflow_version` - the version of the workflow definition (positive integer, default 1)
     * `current_step` - the step module currently being processed (or `nil`)
@@ -63,26 +63,18 @@ defmodule Hephaestus.Core.Instance do
         }
 
   @doc """
-  Creates a new workflow instance for the given workflow module.
-
-  Generates a UUID v4 identifier and initializes the instance with a `:pending`
-  status and the provided initial context.
-
-  Constructor overloads:
-
-    * `new/1` — defaults version to `1` and context to `%{}`
-    * `new/2` — accepts either `(workflow, context)` or `(workflow, version)`
-    * `new/3` — accepts `(workflow, version, context)`
+  Creates a new workflow instance for the given workflow module and explicit ID.
 
   ## Parameters
 
     * `workflow` - the workflow module to execute
     * `version` - the workflow version (positive integer)
-    * `context` - a map of initial data passed to the workflow (default: `%{}`)
+    * `context` - a map of initial data passed to the workflow
+    * `id` - explicit identifier for the workflow instance
 
   ## Examples
 
-      iex> instance = Instance.new(MyApp.Workflows.OrderFlow, 1, %{order_id: 123})
+      iex> instance = Instance.new(MyApp.Workflows.OrderFlow, 1, %{order_id: 123}, "orderid::123")
       iex> instance.status
       :pending
       iex> instance.context.initial
@@ -90,59 +82,16 @@ defmodule Hephaestus.Core.Instance do
       iex> instance.workflow_version
       1
 
-  With default empty context:
-
-      iex> instance = Instance.new(MyApp.Workflows.OrderFlow, 1)
-      iex> instance.context.initial
-      %{}
   """
-  @spec new(module()) :: t()
-  def new(workflow) when is_atom(workflow) do
-    new(workflow, 1, %{})
-  end
-
-  @spec new(module(), map()) :: t()
-  def new(workflow, context) when is_atom(workflow) and is_map(context) do
-    new(workflow, 1, context)
-  end
-
-  @spec new(module(), pos_integer()) :: t()
-  def new(workflow, version) when is_atom(workflow) and is_integer(version) and version > 0 do
-    new(workflow, version, %{})
-  end
-
-  @spec new(module(), pos_integer(), map()) :: t()
-  def new(workflow, version, context)
-      when is_atom(workflow) and is_integer(version) and version > 0 and is_map(context) do
+  @spec new(module(), pos_integer(), map(), String.t()) :: t()
+  def new(workflow, version, context, id)
+      when is_atom(workflow) and is_integer(version) and version > 0 and is_map(context) and
+             is_binary(id) do
     %__MODULE__{
-      id: generate_uuid(),
+      id: id,
       workflow: workflow,
       workflow_version: version,
       context: Context.new(context)
     }
   end
-
-  defp generate_uuid do
-    <<a1::32, a2::16, a3::16, a4::16, a5::48>> = :crypto.strong_rand_bytes(16)
-    version = bor(band(a3, 0x0FFF), 0x4000)
-    variant = bor(band(a4, 0x3FFF), 0x8000)
-
-    [
-      encode(a1, 8),
-      encode(a2, 4),
-      encode(version, 4),
-      encode(variant, 4),
-      encode(a5, 12)
-    ]
-    |> Enum.join("-")
-  end
-
-  defp encode(value, width) do
-    value
-    |> Integer.to_string(16)
-    |> String.pad_leading(width, "0")
-  end
-
-  defp band(left, right), do: Bitwise.band(left, right)
-  defp bor(left, right), do: Bitwise.bor(left, right)
 end

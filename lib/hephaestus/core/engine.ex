@@ -24,7 +24,7 @@ defmodule Hephaestus.Core.Engine do
 
   ## Examples
 
-      iex> instance = Instance.new(MyApp.Workflows.OrderFlow, 1, %{order_id: 123})
+      iex> instance = Instance.new(MyApp.Workflows.OrderFlow, 1, %{order_id: 123}, "orderid::123")
       iex> {:ok, advanced} = Engine.advance(instance)
       iex> advanced.status
       :running
