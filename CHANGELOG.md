@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Support `:id`, `:workflow_version`, and `:status_in` filters in the ETS storage adapter's `query/1` implementation.
+
 ### Changed
 
 - Breaking: `Hephaestus.Core.Instance.new/4` now requires an explicit instance ID instead of generating one internally.
