@@ -83,7 +83,8 @@ defmodule Hephaestus do
           {DynamicSupervisor, name: dynamic_supervisor, strategy: :one_for_one},
           {Task.Supervisor, name: task_supervisor},
           {@hephaestus_storage_module,
-           Keyword.merge(@hephaestus_storage_opts, name: storage_name)}
+           Keyword.merge(@hephaestus_storage_opts, name: storage_name)},
+          {Hephaestus.Instances.Tracker, __MODULE__}
         ]
 
         hephaestus_name = __MODULE__
@@ -145,6 +146,8 @@ defmodule Hephaestus do
       """
       def start_instance(workflow, context, opts \\ [])
           when is_atom(workflow) and is_map(context) do
+        id = Keyword.fetch!(opts, :id)
+
         {version, resolved_module} =
           if workflow.__versioned__?() do
             v =
@@ -163,6 +166,7 @@ defmodule Hephaestus do
           resolved_module,
           context,
           Keyword.merge(runner_opts(),
+            id: id,
             telemetry_metadata: telemetry_metadata,
             workflow_version: version
           )
@@ -176,14 +180,22 @@ defmodule Hephaestus do
 
           :ok = MyApp.Hephaestus.resume(instance_id, :payment_confirmed)
       """
-      def resume(instance_id, event) when is_binary(instance_id) and is_atom(event) do
+      def resume(instance_id, event)
+          when is_binary(instance_id) and (is_atom(event) or is_binary(event)) do
         @hephaestus_runner_module.resume(instance_id, event)
+      end
+
+      @doc """
+      Returns the configured storage adapter and its registered process name.
+      """
+      def __storage__ do
+        {@hephaestus_storage_module, Module.concat(__MODULE__, Storage)}
       end
 
       defp runner_opts do
         [
           config_key: __MODULE__,
-          storage: {@hephaestus_storage_module, Module.concat(__MODULE__, Storage)},
+          storage: __storage__(),
           registry: Module.concat(__MODULE__, Registry),
           dynamic_supervisor: Module.concat(__MODULE__, DynamicSupervisor),
           task_supervisor: Module.concat(__MODULE__, TaskSupervisor)

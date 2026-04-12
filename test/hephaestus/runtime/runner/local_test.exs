@@ -27,6 +27,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
 
   describe "start_instance/3 - linear workflow" do
     test "starts and completes a sync workflow", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-linear-sync")
       {:ok, instance_id} = RunnerLocal.start_instance(Hephaestus.Test.LinearWorkflow, %{}, opts)
 
       Process.sleep(100)
@@ -35,15 +36,36 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
     end
 
     test "persists instance in storage", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-linear-storage")
       {:ok, instance_id} = RunnerLocal.start_instance(Hephaestus.Test.LinearWorkflow, %{}, opts)
 
       Process.sleep(100)
       assert {:ok, _instance} = ETSStorage.get(storage, instance_id)
     end
+
+    test "creates and stores instance with the provided ID", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-linear-custom-id")
+
+      {:ok, instance_id} = RunnerLocal.start_instance(Hephaestus.Test.LinearWorkflow, %{}, opts)
+
+      assert instance_id == "test-linear-custom-id"
+
+      Process.sleep(100)
+      {:ok, instance} = ETSStorage.get(storage, instance_id)
+      assert instance.id == "test-linear-custom-id"
+    end
+
+    test "raises when :id is not provided", %{opts: opts} do
+      assert_raise KeyError, ~r/key :id not found/, fn ->
+        RunnerLocal.start_instance(Hephaestus.Test.LinearWorkflow, %{}, opts)
+      end
+    end
   end
 
   describe "start_instance/3 - branching workflow" do
     test "follows correct branch based on context", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-branch-approve")
+
       {:ok, id} =
         RunnerLocal.start_instance(
           Hephaestus.Test.BranchWorkflow,
@@ -60,6 +82,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
 
   describe "start_instance/3 - async workflow" do
     test "pauses at async step", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-async-wait")
       {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.AsyncWorkflow, %{}, opts)
 
       Process.sleep(100)
@@ -70,6 +93,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
 
   describe "start_instance/3 - event workflow" do
     test "pauses at wait_for_event", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-event-wait")
       {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.EventWorkflow, %{}, opts)
 
       Process.sleep(100)
@@ -81,6 +105,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
     end
 
     test "resumes with payment_confirmed and completes", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-event-resume")
       {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.EventWorkflow, %{}, opts)
       Process.sleep(100)
 
@@ -92,6 +117,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
     end
 
     test "records all completed steps", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-event-completed-steps")
       {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.EventWorkflow, %{}, opts)
       Process.sleep(100)
 
@@ -112,6 +138,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
     end
 
     test "stores context updates from step_b", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-event-context")
       {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.EventWorkflow, %{}, opts)
       Process.sleep(100)
 
@@ -125,6 +152,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
 
   describe "resume/2" do
     test "resumes paused instance and completes", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-resume-timeout")
       {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.AsyncWorkflow, %{}, opts)
       Process.sleep(100)
 
@@ -140,6 +168,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
     end
 
     test "returns error when the instance has already completed", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-resume-completed")
       {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.LinearWorkflow, %{}, opts)
 
       instance = wait_for_instance(storage, id, &(&1.status == :completed))
@@ -151,6 +180,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
 
   describe "schedule_resume/3" do
     test "resumes instance after delay", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-schedule-resume")
       {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.AsyncWorkflow, %{}, opts)
       Process.sleep(100)
 
@@ -168,6 +198,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
 
   describe "start_instance/3 - parallel workflow (fan-out/fan-in)" do
     test "executes parallel branches and joins", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-parallel-join")
       {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.ParallelWorkflow, %{}, opts)
 
       Process.sleep(200)
@@ -185,6 +216,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
       opts: opts,
       storage: storage
     } do
+      opts = put_instance_id(opts, "test-runtime-event")
       {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.EventWorkflow, %{}, opts)
 
       waiting = wait_for_instance(storage, id, &(&1.status == :waiting))
@@ -221,6 +253,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
       opts: opts,
       storage: storage
     } do
+      opts = put_instance_id(opts, "test-runtime-parallel")
       {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.ParallelWorkflow, %{}, opts)
 
       completed = wait_for_instance(storage, id, &(&1.status == :completed), 1_500)
@@ -255,6 +288,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
 
   describe "GenServer lifecycle" do
     test "GenServer stops after workflow completes", %{opts: opts} do
+      opts = put_instance_id(opts, "test-lifecycle-stop")
       {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.LinearWorkflow, %{}, opts)
       Process.sleep(100)
 
@@ -263,6 +297,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
     end
 
     test "registers in Registry while running", %{opts: opts} do
+      opts = put_instance_id(opts, "test-lifecycle-running")
       {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.AsyncWorkflow, %{}, opts)
       Process.sleep(100)
 
@@ -274,6 +309,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
 
   describe "crash recovery" do
     test "waiting instance survives crash and can resume", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-crash-resume")
       {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.AsyncWorkflow, %{}, opts)
       Process.sleep(100)
 
@@ -295,6 +331,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
     end
 
     test "waiting instance keeps persisted state across crash", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-crash-state")
       {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.AsyncWorkflow, %{}, opts)
       Process.sleep(100)
 
@@ -320,6 +357,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
     end
 
     test "completed instance is not restarted after normal stop", %{opts: opts} do
+      opts = put_instance_id(opts, "test-crash-completed")
       {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.LinearWorkflow, %{}, opts)
       Process.sleep(100)
 
@@ -358,4 +396,6 @@ defmodule Hephaestus.Runtime.Runner.LocalTest do
       flunk("timed out waiting for instance #{id}")
     end
   end
+
+  defp put_instance_id(opts, id), do: Keyword.put(opts, :id, id)
 end

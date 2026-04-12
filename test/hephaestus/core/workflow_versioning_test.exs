@@ -2,7 +2,7 @@ defmodule Hephaestus.Core.WorkflowVersioningTest do
   use ExUnit.Case, async: true
 
   defmodule ExplicitV3Flow do
-    use Hephaestus.Workflow, version: 3
+    use Hephaestus.Workflow, version: 3, unique: [key: "testver"]
 
     def start, do: Hephaestus.Test.V2.StepA
     def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: Hephaestus.Steps.Done
@@ -68,7 +68,7 @@ defmodule Hephaestus.Core.WorkflowVersioningTest do
         Code.compile_quoted(
           quote do
             defmodule ZeroVersionFlow do
-              use Hephaestus.Workflow, version: 0
+              use Hephaestus.Workflow, version: 0, unique: [key: "testver"]
               def start, do: Hephaestus.Test.V2.StepA
               def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: Hephaestus.Steps.Done
             end
@@ -79,13 +79,13 @@ defmodule Hephaestus.Core.WorkflowVersioningTest do
   end
 
   defmodule Umbrella.V1 do
-    use Hephaestus.Workflow, version: 1
+    use Hephaestus.Workflow, version: 1, unique: [key: "testver"]
     def start, do: Hephaestus.Test.V2.StepA
     def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: Hephaestus.Steps.Done
   end
 
   defmodule Umbrella.V2 do
-    use Hephaestus.Workflow, version: 2
+    use Hephaestus.Workflow, version: 2, unique: [key: "testver"]
     def start, do: Hephaestus.Test.V2.StepA
     def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: Hephaestus.Steps.Done
   end
@@ -93,7 +93,8 @@ defmodule Hephaestus.Core.WorkflowVersioningTest do
   defmodule Umbrella do
     use Hephaestus.Workflow,
       versions: %{1 => Umbrella.V1, 2 => Umbrella.V2},
-      current: 2
+      current: 2,
+      unique: [key: "testumbrella"]
   end
 
   describe "umbrella module" do
@@ -152,9 +153,9 @@ defmodule Hephaestus.Core.WorkflowVersioningTest do
           quote do
             defmodule BothOptsFlow do
               use Hephaestus.Workflow,
-                version: 5,
+                version: 5, unique: [key: "test"],
                 versions: %{1 => Hephaestus.Test.V2.LinearWorkflow},
-                current: 1
+                current: 1, unique: [key: "test"]
             end
           end
         )
@@ -166,7 +167,7 @@ defmodule Hephaestus.Core.WorkflowVersioningTest do
         Code.compile_quoted(
           quote do
             defmodule BadKeysFlow do
-              use Hephaestus.Workflow, versions: %{0 => SomeModule}, current: 0
+              use Hephaestus.Workflow, versions: %{0 => SomeModule}, current: 0, unique: [key: "test"]
             end
           end
         )
@@ -182,7 +183,7 @@ defmodule Hephaestus.Core.WorkflowVersioningTest do
                 versions: %{
                   1 => Hephaestus.Core.WorkflowVersioningTest.Umbrella.V1
                 },
-                current: 99
+                current: 99, unique: [key: "test"]
             end
           end
         )
@@ -191,7 +192,7 @@ defmodule Hephaestus.Core.WorkflowVersioningTest do
 
     test "raises when version module __version__/0 doesn't match key" do
       defmodule MismatchV5 do
-        use Hephaestus.Workflow, version: 5
+        use Hephaestus.Workflow, version: 5, unique: [key: "testver"]
         def start, do: Hephaestus.Test.V2.StepA
         def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: Hephaestus.Steps.Done
       end
@@ -202,7 +203,7 @@ defmodule Hephaestus.Core.WorkflowVersioningTest do
             defmodule MismatchUmbrella do
               use Hephaestus.Workflow,
                 versions: %{1 => Hephaestus.Core.WorkflowVersioningTest.MismatchV5},
-                current: 1
+                current: 1, unique: [key: "test"]
             end
           end
         )
@@ -211,7 +212,7 @@ defmodule Hephaestus.Core.WorkflowVersioningTest do
 
     test "raises when version module not nested under umbrella namespace" do
       defmodule OutsideNS do
-        use Hephaestus.Workflow, version: 1
+        use Hephaestus.Workflow, version: 1, unique: [key: "testver"]
         def start, do: Hephaestus.Test.V2.StepA
         def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: Hephaestus.Steps.Done
       end
@@ -222,7 +223,7 @@ defmodule Hephaestus.Core.WorkflowVersioningTest do
             defmodule NSUmbrella do
               use Hephaestus.Workflow,
                 versions: %{1 => Hephaestus.Core.WorkflowVersioningTest.OutsideNS},
-                current: 1
+                current: 1, unique: [key: "test"]
             end
           end
         )
@@ -240,7 +241,7 @@ defmodule Hephaestus.Core.WorkflowVersioningTest do
             defmodule Hephaestus.Core.WorkflowVersioningTest.FakeBehaviourUmbrella do
               use Hephaestus.Workflow,
                 versions: %{1 => Hephaestus.Core.WorkflowVersioningTest.FakeVersionModule},
-                current: 1
+                current: 1, unique: [key: "test"]
             end
           end
         )
@@ -251,13 +252,13 @@ defmodule Hephaestus.Core.WorkflowVersioningTest do
   describe "umbrella with custom version_for/2" do
     test "version_for/2 can be overridden" do
       defmodule CustomResolver.V1 do
-        use Hephaestus.Workflow, version: 1
+        use Hephaestus.Workflow, version: 1, unique: [key: "testver"]
         def start, do: Hephaestus.Test.V2.StepA
         def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: Hephaestus.Steps.Done
       end
 
       defmodule CustomResolver.V2 do
-        use Hephaestus.Workflow, version: 2
+        use Hephaestus.Workflow, version: 2, unique: [key: "testver"]
         def start, do: Hephaestus.Test.V2.StepA
         def transit(Hephaestus.Test.V2.StepA, :done, _ctx), do: Hephaestus.Steps.Done
       end
@@ -265,7 +266,7 @@ defmodule Hephaestus.Core.WorkflowVersioningTest do
       defmodule CustomResolver do
         use Hephaestus.Workflow,
           versions: %{1 => CustomResolver.V1, 2 => CustomResolver.V2},
-          current: 2
+          current: 2, unique: [key: "testcr"]
 
         def version_for(%{2 => _}, opts) do
           if opts[:force_v1], do: 1

@@ -11,10 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Support `:id`, `:workflow_version`, and `:status_in` filters in the ETS storage adapter's `query/1` implementation.
 - `Hephaestus.Uniqueness.check/5` for scope-aware active-instance uniqueness checks via injected storage queries.
+- Required `:unique` workflow DSL option with generated `__unique__/0` and `__hephaestus__/0` introspection helpers.
 
 ### Changed
 
 - Breaking: `Hephaestus.Core.Instance.new/4` now requires an explicit instance ID instead of generating one internally.
+- Breaking: `use Hephaestus` entry modules now require `id:` in `start_instance/3`, register an `Instances.Tracker` child in their supervision tree, and expose `__storage__/0` for storage adapter lookup.
 
 ## [0.2.1] - 2026-04-09
 

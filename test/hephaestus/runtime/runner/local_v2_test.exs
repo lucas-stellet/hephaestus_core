@@ -33,6 +33,8 @@ defmodule Hephaestus.Runtime.Runner.LocalV2Test do
 
   describe "linear workflow end-to-end" do
     test "start_instance executes to completion", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-v2-linear")
+
       assert {:ok, instance_id} =
                RunnerLocal.start_instance(Hephaestus.Test.V2.LinearWorkflow, %{data: "test"}, opts)
 
@@ -46,6 +48,8 @@ defmodule Hephaestus.Runtime.Runner.LocalV2Test do
 
   describe "branch workflow end-to-end" do
     test "follows approved branch to completion", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-v2-branch-approve")
+
       assert {:ok, instance_id} =
                RunnerLocal.start_instance(
                  Hephaestus.Test.V2.BranchWorkflow,
@@ -60,6 +64,8 @@ defmodule Hephaestus.Runtime.Runner.LocalV2Test do
     end
 
     test "follows rejected branch to completion", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-v2-branch-reject")
+
       assert {:ok, instance_id} =
                RunnerLocal.start_instance(
                  Hephaestus.Test.V2.BranchWorkflow,
@@ -76,6 +82,8 @@ defmodule Hephaestus.Runtime.Runner.LocalV2Test do
 
   describe "fan-out workflow end-to-end" do
     test "parallel steps execute and converge at join", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-v2-fanout")
+
       assert {:ok, instance_id} =
                RunnerLocal.start_instance(Hephaestus.Test.V2.FanOutWorkflow, %{}, opts)
 
@@ -89,6 +97,8 @@ defmodule Hephaestus.Runtime.Runner.LocalV2Test do
 
   describe "async workflow with resume" do
     test "pauses at async step and resumes with atom event", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-v2-async")
+
       assert {:ok, instance_id} =
                RunnerLocal.start_instance(Hephaestus.Test.V2.AsyncWorkflow, %{}, opts)
 
@@ -105,6 +115,8 @@ defmodule Hephaestus.Runtime.Runner.LocalV2Test do
 
   describe "event workflow with external resume" do
     test "waits for event and resumes on external trigger", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-v2-event")
+
       assert {:ok, instance_id} =
                RunnerLocal.start_instance(Hephaestus.Test.V2.EventWorkflow, %{}, opts)
 
@@ -121,6 +133,8 @@ defmodule Hephaestus.Runtime.Runner.LocalV2Test do
 
   describe "dynamic transit/3 workflow end-to-end" do
     test "routes dynamically based on context", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-v2-dynamic")
+
       assert {:ok, instance_id} =
                RunnerLocal.start_instance(Hephaestus.Test.V2.DynamicWorkflow, %{use_b: true}, opts)
 
@@ -133,6 +147,8 @@ defmodule Hephaestus.Runtime.Runner.LocalV2Test do
 
   describe "context propagation" do
     test "step results accessible via snake_case keys", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-v2-context")
+
       assert {:ok, instance_id} =
                RunnerLocal.start_instance(Hephaestus.Test.V2.LinearWorkflow, %{data: "test"}, opts)
 
@@ -144,6 +160,8 @@ defmodule Hephaestus.Runtime.Runner.LocalV2Test do
 
   describe "crash recovery" do
     test "recovered instance resumes from persisted state", %{opts: opts, storage: storage} do
+      opts = put_instance_id(opts, "test-v2-crash")
+
       assert {:ok, instance_id} =
                RunnerLocal.start_instance(Hephaestus.Test.V2.AsyncWorkflow, %{}, opts)
 
@@ -219,4 +237,6 @@ defmodule Hephaestus.Runtime.Runner.LocalV2Test do
       end
     end
   end
+
+  defp put_instance_id(opts, id), do: Keyword.put(opts, :id, id)
 end

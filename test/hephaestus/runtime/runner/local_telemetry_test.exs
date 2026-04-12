@@ -46,7 +46,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTelemetryTest do
       opts: opts,
       storage: storage
     } do
-      {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.V2.LinearWorkflow, %{}, opts)
+      {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.V2.LinearWorkflow, %{}, [{:id, "testv2::telem1"} | opts])
       wait_for_instance(storage, id, &(&1.status == :completed))
 
       assert_receive {:telemetry, [:hephaestus, :workflow, :start], measurements, metadata}, 5000
@@ -56,7 +56,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTelemetryTest do
     end
 
     test "emits step:start and step:stop for each step", %{opts: opts, storage: storage} do
-      {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.V2.LinearWorkflow, %{}, opts)
+      {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.V2.LinearWorkflow, %{}, [{:id, "testv2::telem2"} | opts])
       wait_for_instance(storage, id, &(&1.status == :completed))
 
       # Drain all messages and collect step events
@@ -82,7 +82,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTelemetryTest do
     end
 
     test "emits workflow:stop with duration and step_count", %{opts: opts, storage: storage} do
-      {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.V2.LinearWorkflow, %{}, opts)
+      {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.V2.LinearWorkflow, %{}, [{:id, "testv2::telem3"} | opts])
       wait_for_instance(storage, id, &(&1.status == :completed))
 
       assert_receive {:telemetry, [:hephaestus, :workflow, :stop], measurements, metadata}, 5000
@@ -93,7 +93,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTelemetryTest do
     end
 
     test "emits engine:advance events", %{opts: opts, storage: storage} do
-      {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.V2.LinearWorkflow, %{}, opts)
+      {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.V2.LinearWorkflow, %{}, [{:id, "testv2::telem4"} | opts])
       wait_for_instance(storage, id, &(&1.status == :completed))
 
       messages = drain_telemetry_messages()
@@ -114,7 +114,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTelemetryTest do
       opts: opts,
       storage: storage
     } do
-      {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.V2.LinearWorkflow, %{}, opts)
+      {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.V2.LinearWorkflow, %{}, [{:id, "testv2::telem5"} | opts])
       wait_for_instance(storage, id, &(&1.status == :completed))
 
       messages = drain_telemetry_messages()
@@ -135,7 +135,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTelemetryTest do
 
   describe "fan-out workflow telemetry" do
     test "step:start has concurrent: true for parallel steps", %{opts: opts, storage: storage} do
-      {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.V2.FanOutWorkflow, %{}, opts)
+      {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.V2.FanOutWorkflow, %{}, [{:id, "testv2::telem6"} | opts])
       wait_for_instance(storage, id, &(&1.status == :completed), 2_000)
 
       messages = drain_telemetry_messages()
@@ -161,7 +161,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTelemetryTest do
       opts: opts,
       storage: storage
     } do
-      {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.V2.FanOutWorkflow, %{}, opts)
+      {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.V2.FanOutWorkflow, %{}, [{:id, "testv2::telem7"} | opts])
       wait_for_instance(storage, id, &(&1.status == :completed), 2_000)
 
       messages = drain_telemetry_messages()
@@ -186,7 +186,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTelemetryTest do
 
   describe "async workflow telemetry" do
     test "emits step:async then step:resume on resume", %{opts: opts, storage: storage} do
-      {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.V2.AsyncWorkflow, %{}, opts)
+      {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.V2.AsyncWorkflow, %{}, [{:id, "testv2::telem8"} | opts])
       wait_for_instance(storage, id, &(&1.status == :waiting))
 
       assert_receive {:telemetry, [:hephaestus, :step, :async], async_measurements,
@@ -214,7 +214,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTelemetryTest do
       opts: opts,
       storage: storage
     } do
-      {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.V2.FailingWorkflow, %{}, opts)
+      {:ok, id} = RunnerLocal.start_instance(Hephaestus.Test.V2.FailingWorkflow, %{}, [{:id, "testv2::telem9"} | opts])
       wait_for_instance(storage, id, &(&1.status == :failed), 2_000)
 
       assert_receive {:telemetry, [:hephaestus, :step, :exception], step_measurements,
@@ -243,7 +243,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTelemetryTest do
       opts_with_meta = Keyword.put(opts, :telemetry_metadata, %{request_id: "test-456"})
 
       {:ok, id} =
-        RunnerLocal.start_instance(Hephaestus.Test.V2.LinearWorkflow, %{}, opts_with_meta)
+        RunnerLocal.start_instance(Hephaestus.Test.V2.LinearWorkflow, %{}, [{:id, "testv2::telem10"} | opts_with_meta])
 
       wait_for_instance(storage, id, &(&1.status == :completed))
 
@@ -272,7 +272,7 @@ defmodule Hephaestus.Runtime.Runner.LocalTelemetryTest do
         Keyword.put(opts, :telemetry_metadata, %{instance_id: "fake", workflow: "bogus"})
 
       {:ok, id} =
-        RunnerLocal.start_instance(Hephaestus.Test.V2.LinearWorkflow, %{}, opts_with_fake)
+        RunnerLocal.start_instance(Hephaestus.Test.V2.LinearWorkflow, %{}, [{:id, "testv2::telem11"} | opts_with_fake])
 
       wait_for_instance(storage, id, &(&1.status == :completed))
 

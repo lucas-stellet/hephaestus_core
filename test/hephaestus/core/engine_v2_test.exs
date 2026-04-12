@@ -1,5 +1,5 @@
 defmodule Hephaestus.Test.V2.EngineBranchWorkflow do
-  use Hephaestus.Workflow
+  use Hephaestus.Workflow, unique: [key: "testengine"]
 
   @impl true
   def start, do: Hephaestus.Test.V2.BranchStep
@@ -12,7 +12,7 @@ defmodule Hephaestus.Test.V2.EngineBranchWorkflow do
 end
 
 defmodule Hephaestus.Test.V2.EngineDynamicWorkflow do
-  use Hephaestus.Workflow
+  use Hephaestus.Workflow, unique: [key: "testengine"]
 
   @impl true
   def start, do: Hephaestus.Test.V2.StepA
@@ -239,7 +239,7 @@ defmodule Hephaestus.Core.EngineV2Test do
 
     test "stores transition config for activated steps" do
       defmodule TransitionConfigWorkflow do
-        use Hephaestus.Workflow
+        use Hephaestus.Workflow, unique: [key: "testengine"]
 
         @impl true
         def start, do: Hephaestus.Test.V2.StepA

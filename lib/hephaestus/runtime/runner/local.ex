@@ -68,6 +68,7 @@ defmodule Hephaestus.Runtime.Runner.Local do
 
   ## Options
 
+    * `:id` — explicit instance ID to assign to the workflow instance.
     * `:storage` — a `{module, name}` tuple for the storage adapter.
     * `:registry` — the `Registry` used for process name registration.
     * `:dynamic_supervisor` — the `DynamicSupervisor` that will own the runner process.
@@ -84,9 +85,10 @@ defmodule Hephaestus.Runtime.Runner.Local do
     remember_registry(registry)
 
     version = Keyword.get(opts, :workflow_version, 1)
+    instance_id = Keyword.fetch!(opts, :id)
 
     instance = %{
-      Instance.new(workflow, version, context, build_instance_id())
+      Instance.new(workflow, version, context, instance_id)
       | telemetry_metadata: telemetry_metadata
     }
 
@@ -558,11 +560,6 @@ defmodule Hephaestus.Runtime.Runner.Local do
 
   defp storage_get({storage_module, storage_name}, instance_id) do
     apply(storage_module, :get, [storage_name, instance_id])
-  end
-
-  defp build_instance_id do
-    :crypto.strong_rand_bytes(16)
-    |> Base.encode16(case: :lower)
   end
 
   defp remember_registry(registry), do: :persistent_term.put(@registry_key, registry)

@@ -37,7 +37,7 @@ defmodule Hephaestus.Core.WorkflowTagsTest do
         Code.compile_quoted(
           quote do
             defmodule BadTagsNotList do
-              use Hephaestus.Workflow, tags: "not_a_list"
+              use Hephaestus.Workflow, unique: [key: "test"], tags: "not_a_list"
             end
           end
         )
@@ -49,7 +49,7 @@ defmodule Hephaestus.Core.WorkflowTagsTest do
         Code.compile_quoted(
           quote do
             defmodule BadTagsAtoms do
-              use Hephaestus.Workflow, tags: [:atom_tag]
+              use Hephaestus.Workflow, unique: [key: "test"], tags: [:atom_tag]
             end
           end
         )
@@ -61,7 +61,7 @@ defmodule Hephaestus.Core.WorkflowTagsTest do
         Code.compile_quoted(
           quote do
             defmodule BadMetaNotMap do
-              use Hephaestus.Workflow, metadata: "not_a_map"
+              use Hephaestus.Workflow, unique: [key: "test"], metadata: "not_a_map"
             end
           end
         )
@@ -73,7 +73,7 @@ defmodule Hephaestus.Core.WorkflowTagsTest do
         Code.compile_quoted(
           quote do
             defmodule BadMetaAtomKeys do
-              use Hephaestus.Workflow, metadata: %{atom_key: "value"}
+              use Hephaestus.Workflow, unique: [key: "test"], metadata: %{atom_key: "value"}
             end
           end
         )
@@ -85,7 +85,7 @@ defmodule Hephaestus.Core.WorkflowTagsTest do
         Code.compile_quoted(
           quote do
             defmodule BadMetaValues do
-              use Hephaestus.Workflow, metadata: %{"key" => self()}
+              use Hephaestus.Workflow, unique: [key: "test"], metadata: %{"key" => self()}
             end
           end
         )
@@ -97,6 +97,7 @@ defmodule Hephaestus.Core.WorkflowTagsTest do
         quote do
           defmodule NestedMetaWorkflow do
             use Hephaestus.Workflow,
+              unique: [key: "test"],
               metadata: %{
                 "nested" => %{"ok" => true, "count" => 42},
                 "list" => ["a", "b"],

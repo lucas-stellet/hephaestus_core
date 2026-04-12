@@ -5,7 +5,7 @@ defmodule Hephaestus.Core.WorkflowV2Test do
     test "linear workflow compiles and generates __predecessors__/1" do
       # Arrange & Act
       defmodule LinearFlow do
-        use Hephaestus.Workflow
+        use Hephaestus.Workflow, unique: [key: "testwf"]
 
         @impl true
         def start, do: Hephaestus.Test.V2.StepA
@@ -26,7 +26,7 @@ defmodule Hephaestus.Core.WorkflowV2Test do
     test "branch workflow compiles with multiple events from same step" do
       # Arrange & Act
       defmodule BranchFlow do
-        use Hephaestus.Workflow
+        use Hephaestus.Workflow, unique: [key: "testwf"]
 
         @impl true
         def start, do: Hephaestus.Test.V2.BranchStep
@@ -46,7 +46,7 @@ defmodule Hephaestus.Core.WorkflowV2Test do
     test "fan-out workflow compiles when branches converge" do
       # Arrange & Act
       defmodule FanOutFlow do
-        use Hephaestus.Workflow
+        use Hephaestus.Workflow, unique: [key: "testwf"]
 
         @impl true
         def start, do: Hephaestus.Test.V2.StepA
@@ -67,7 +67,7 @@ defmodule Hephaestus.Core.WorkflowV2Test do
     test "workflow with transit/3 and @targets compiles" do
       # Arrange & Act
       defmodule DynamicFlow do
-        use Hephaestus.Workflow
+        use Hephaestus.Workflow, unique: [key: "testwf"]
 
         @impl true
         def start, do: Hephaestus.Test.V2.StepA
@@ -91,7 +91,7 @@ defmodule Hephaestus.Core.WorkflowV2Test do
     test "__graph__/0 returns a Graph struct" do
       # Arrange
       defmodule GraphFlow do
-        use Hephaestus.Workflow
+        use Hephaestus.Workflow, unique: [key: "testwf"]
 
         @impl true
         def start, do: Hephaestus.Test.V2.StepA
@@ -125,7 +125,7 @@ defmodule Hephaestus.Core.WorkflowV2Test do
       assert_raise CompileError, ~r/[Cc]ycle/, fn ->
         Code.compile_quoted(quote do
           defmodule CycleFlow do
-            use Hephaestus.Workflow
+            use Hephaestus.Workflow, unique: [key: "testwf"]
 
             @impl true
             def start, do: Hephaestus.Test.V2.StepA
@@ -143,7 +143,7 @@ defmodule Hephaestus.Core.WorkflowV2Test do
       assert_raise CompileError, ~r/[Uu]nreachable/, fn ->
         Code.compile_quoted(quote do
           defmodule OrphanFlow do
-            use Hephaestus.Workflow
+            use Hephaestus.Workflow, unique: [key: "testwf"]
 
             @impl true
             def start, do: Hephaestus.Test.V2.StepA
@@ -161,7 +161,7 @@ defmodule Hephaestus.Core.WorkflowV2Test do
       assert_raise CompileError, ~r/Hephaestus\.Steps\.Done/, fn ->
         Code.compile_quoted(quote do
           defmodule NoEndFlow do
-            use Hephaestus.Workflow
+            use Hephaestus.Workflow, unique: [key: "testwf"]
 
             @impl true
             def start, do: Hephaestus.Test.V2.StepA
@@ -178,7 +178,7 @@ defmodule Hephaestus.Core.WorkflowV2Test do
       assert_raise CompileError, ~r/[Cc]onverg|[Jj]oin/, fn ->
         Code.compile_quoted(quote do
           defmodule NoJoinFlow do
-            use Hephaestus.Workflow
+            use Hephaestus.Workflow, unique: [key: "testwf"]
 
             @impl true
             def start, do: Hephaestus.Test.V2.StepA
@@ -197,7 +197,7 @@ defmodule Hephaestus.Core.WorkflowV2Test do
       assert_raise CompileError, ~r/declares event.*but no transit/, fn ->
         Code.compile_quoted(quote do
           defmodule MissingTransitFlow do
-            use Hephaestus.Workflow
+            use Hephaestus.Workflow, unique: [key: "testwf"]
 
             @impl true
             def start, do: Hephaestus.Test.V2.StepWithExtraEvent
@@ -214,7 +214,7 @@ defmodule Hephaestus.Core.WorkflowV2Test do
       assert_raise CompileError, ~r/does not declare.*in events/, fn ->
         Code.compile_quoted(quote do
           defmodule UndeclaredEventFlow do
-            use Hephaestus.Workflow
+            use Hephaestus.Workflow, unique: [key: "testwf"]
 
             @impl true
             def start, do: Hephaestus.Test.V2.StepA
@@ -231,7 +231,7 @@ defmodule Hephaestus.Core.WorkflowV2Test do
       assert_raise CompileError, ~r/context key/, fn ->
         Code.compile_quoted(quote do
           defmodule CollisionFlow do
-            use Hephaestus.Workflow
+            use Hephaestus.Workflow, unique: [key: "testwf"]
 
             defmodule Foo.Validate do
               @behaviour Hephaestus.Steps.Step
@@ -269,7 +269,7 @@ defmodule Hephaestus.Core.WorkflowV2Test do
       assert_raise CompileError, ~r/events.*atoms/, fn ->
         Code.compile_quoted(quote do
           defmodule NonAtomEventsFlow do
-            use Hephaestus.Workflow
+            use Hephaestus.Workflow, unique: [key: "testwf"]
 
             defmodule BadStep do
               @behaviour Hephaestus.Steps.Step

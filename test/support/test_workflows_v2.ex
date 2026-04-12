@@ -1,5 +1,5 @@
 defmodule Hephaestus.Test.V2.LinearWorkflow do
-  use Hephaestus.Workflow
+  use Hephaestus.Workflow, unique: [key: "testv2"]
 
   @impl true
   def start, do: Hephaestus.Test.V2.StepA
@@ -10,7 +10,7 @@ defmodule Hephaestus.Test.V2.LinearWorkflow do
 end
 
 defmodule Hephaestus.Test.V2.ConfigStartWorkflow do
-  use Hephaestus.Workflow
+  use Hephaestus.Workflow, unique: [key: "testv2"]
 
   @impl true
   def start, do: {Hephaestus.Test.V2.ConfigStep, %{timeout: 5000}}
@@ -20,7 +20,7 @@ defmodule Hephaestus.Test.V2.ConfigStartWorkflow do
 end
 
 defmodule Hephaestus.Test.V2.BranchWorkflow do
-  use Hephaestus.Workflow
+  use Hephaestus.Workflow, unique: [key: "testv2"]
 
   @impl true
   def start, do: Hephaestus.Test.V2.BranchStep
@@ -33,7 +33,7 @@ defmodule Hephaestus.Test.V2.BranchWorkflow do
 end
 
 defmodule Hephaestus.Test.V2.FanOutWorkflow do
-  use Hephaestus.Workflow
+  use Hephaestus.Workflow, unique: [key: "testv2"]
 
   @impl true
   def start, do: Hephaestus.Test.V2.StepA
@@ -48,7 +48,7 @@ defmodule Hephaestus.Test.V2.FanOutWorkflow do
 end
 
 defmodule Hephaestus.Test.V2.AsyncWorkflow do
-  use Hephaestus.Workflow
+  use Hephaestus.Workflow, unique: [key: "testv2"]
 
   @impl true
   def start, do: Hephaestus.Test.V2.StepA
@@ -60,7 +60,7 @@ defmodule Hephaestus.Test.V2.AsyncWorkflow do
 end
 
 defmodule Hephaestus.Test.V2.EventWorkflow do
-  use Hephaestus.Workflow
+  use Hephaestus.Workflow, unique: [key: "testv2"]
 
   @impl true
   def start, do: Hephaestus.Test.V2.StepA
@@ -73,6 +73,7 @@ end
 
 defmodule Hephaestus.Test.V2.TaggedWorkflow do
   use Hephaestus.Workflow,
+    unique: [key: "testv2"],
     tags: ["onboarding", "growth"],
     metadata: %{"team" => "growth", "priority" => "high"}
 
@@ -85,7 +86,7 @@ defmodule Hephaestus.Test.V2.TaggedWorkflow do
 end
 
 defmodule Hephaestus.Test.V2.FailingWorkflow do
-  use Hephaestus.Workflow
+  use Hephaestus.Workflow, unique: [key: "testv2"]
 
   @impl true
   def start, do: Hephaestus.Test.V2.FailStep
@@ -95,7 +96,7 @@ defmodule Hephaestus.Test.V2.FailingWorkflow do
 end
 
 defmodule Hephaestus.Test.V2.DynamicWorkflow do
-  use Hephaestus.Workflow
+  use Hephaestus.Workflow, unique: [key: "testv2"]
 
   @impl true
   def start, do: Hephaestus.Test.V2.StepA

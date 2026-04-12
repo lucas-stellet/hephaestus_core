@@ -21,19 +21,37 @@ defmodule Hephaestus.EntryModuleTest do
       assert Process.whereis(TestHephaestus.TaskSupervisor) != nil
       assert Process.whereis(TestHephaestus.Storage) != nil
     end
+
+    test "Hephaestus module is discoverable via Instances.lookup!" do
+      assert Hephaestus.Instances.lookup!() == TestHephaestus
+    end
   end
 
-  describe "start_instance/2" do
-    test "starts a workflow and returns instance id" do
+  describe "start_instance/3 with custom ID" do
+    test "accepts and passes through explicit ID" do
       assert {:ok, instance_id} =
-               TestHephaestus.start_instance(Hephaestus.Test.LinearWorkflow, %{order_id: 123})
+               TestHephaestus.start_instance(
+                 Hephaestus.Test.LinearWorkflow,
+                 %{order_id: 123},
+                 id: "testlinear::entry1"
+               )
 
-      assert is_binary(instance_id)
+      assert instance_id == "testlinear::entry1"
+    end
+
+    test "raises KeyError when :id is not provided" do
+      assert_raise KeyError, ~r/key :id not found/, fn ->
+        TestHephaestus.start_instance(Hephaestus.Test.LinearWorkflow, %{})
+      end
     end
 
     test "workflow completes end-to-end" do
       assert {:ok, instance_id} =
-               TestHephaestus.start_instance(Hephaestus.Test.LinearWorkflow, %{})
+               TestHephaestus.start_instance(
+                 Hephaestus.Test.LinearWorkflow,
+                 %{},
+                 id: "testlinear::entry2"
+               )
 
       Process.sleep(100)
 
@@ -44,7 +62,13 @@ defmodule Hephaestus.EntryModuleTest do
 
   describe "resume/2" do
     test "resumes async workflow" do
-      assert {:ok, id} = TestHephaestus.start_instance(Hephaestus.Test.AsyncWorkflow, %{})
+      assert {:ok, id} =
+               TestHephaestus.start_instance(
+                 Hephaestus.Test.AsyncWorkflow,
+                 %{},
+                 id: "testasync::entry1"
+               )
+
       Process.sleep(100)
 
       assert :ok = TestHephaestus.resume(id, :timeout)
@@ -55,7 +79,13 @@ defmodule Hephaestus.EntryModuleTest do
     end
 
     test "resumes event workflow with payment_confirmed" do
-      assert {:ok, id} = TestHephaestus.start_instance(Hephaestus.Test.EventWorkflow, %{})
+      assert {:ok, id} =
+               TestHephaestus.start_instance(
+                 Hephaestus.Test.EventWorkflow,
+                 %{},
+                 id: "testevent::entry1"
+               )
+
       Process.sleep(100)
 
       assert {:ok, waiting_instance} = ETSStorage.get(TestHephaestus.Storage, id)
@@ -73,12 +103,27 @@ defmodule Hephaestus.EntryModuleTest do
 
   describe "parallel workflow end-to-end" do
     test "fan-out/fan-in completes via entry module" do
-      assert {:ok, id} = TestHephaestus.start_instance(Hephaestus.Test.ParallelWorkflow, %{})
+      assert {:ok, id} =
+               TestHephaestus.start_instance(
+                 Hephaestus.Test.ParallelWorkflow,
+                 %{},
+                 id: "testparallel::entry1"
+               )
+
       Process.sleep(200)
 
       assert {:ok, instance} = ETSStorage.get(TestHephaestus.Storage, id)
       assert instance.status == :completed
       assert MapSet.member?(instance.completed_steps, Hephaestus.Test.Parallel.Join)
+    end
+  end
+
+  describe "__storage__/0" do
+    test "returns the storage adapter tuple" do
+      {mod, name} = TestHephaestus.__storage__()
+
+      assert mod == Hephaestus.Runtime.Storage.ETS
+      assert name == TestHephaestus.Storage
     end
   end
 

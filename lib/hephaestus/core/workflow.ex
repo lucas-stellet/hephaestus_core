@@ -293,6 +293,12 @@ defmodule Hephaestus.Workflow do
       Atom keys are rejected because they lose identity after JSON round-tripping in
       adapters like Oban.
 
+    * `:unique` — required keyword options used to build a `%Hephaestus.Workflow.Unique{}`
+      for runtime uniqueness checks.
+
+    * `:hephaestus` — optional module reference for multi-instance setups that need to
+      identify which Hephaestus facade module should coordinate the workflow.
+
     * `:version` — a positive integer identifying this workflow definition version
       (default: `1`). Used by versioned workflow registries to route instances to the
       correct module.
@@ -314,6 +320,12 @@ defmodule Hephaestus.Workflow do
 
     * `__metadata__/0` — returns the metadata map declared via the `:metadata` option
       (default: `%{}`).
+
+    * `__unique__/0` — returns the validated `%Hephaestus.Workflow.Unique{}` declared via
+      the required `:unique` option.
+
+    * `__hephaestus__/0` — returns the optional module passed via the `:hephaestus`
+      option, or `nil` when not configured.
 
     * `__predecessors__/1` — returns the set of immediate predecessor steps for a given
       step module as a `MapSet`. Used by `Hephaestus.Core.Engine` to implement join
@@ -391,6 +403,8 @@ defmodule Hephaestus.Workflow do
 
       @hephaestus_tags Keyword.get(opts, :tags, [])
       @hephaestus_metadata Keyword.get(opts, :metadata, %{})
+      @hephaestus_unique Keyword.get(opts, :unique, nil)
+      @hephaestus_instance Keyword.get(opts, :hephaestus, nil)
       @hephaestus_version Keyword.get(opts, :version, 1)
     end
   end
@@ -435,11 +449,14 @@ defmodule Hephaestus.Workflow do
   defp __before_compile_umbrella__(env, versions) do
     tags = Module.get_attribute(env.module, :hephaestus_tags)
     metadata = Module.get_attribute(env.module, :hephaestus_metadata)
+    unique_opts = Module.get_attribute(env.module, :hephaestus_unique)
+    hephaestus_instance = Module.get_attribute(env.module, :hephaestus_instance)
     current = Module.get_attribute(env.module, :hephaestus_current)
     explicit_version = Module.get_attribute(env.module, :hephaestus_version)
 
     validate_tags!(tags)
     validate_metadata!(metadata)
+    unique = validate_unique!(unique_opts, env)
 
     if explicit_version != 1 do
       raise CompileError,
@@ -455,12 +472,17 @@ defmodule Hephaestus.Workflow do
 
     versions_ast = Macro.escape(versions)
     metadata_ast = Macro.escape(metadata)
+    unique_ast = Macro.escape(unique)
 
     quote do
       @doc false
       def __tags__, do: unquote(tags)
       @doc false
       def __metadata__, do: unquote(metadata_ast)
+      @doc false
+      def __unique__, do: unquote(unique_ast)
+      @doc false
+      def __hephaestus__, do: unquote(hephaestus_instance)
 
       @doc false
       def __versions__, do: unquote(versions_ast)
@@ -498,10 +520,13 @@ defmodule Hephaestus.Workflow do
   defp __before_compile_standard__(env) do
     tags = Module.get_attribute(env.module, :hephaestus_tags)
     metadata = Module.get_attribute(env.module, :hephaestus_metadata)
+    unique_opts = Module.get_attribute(env.module, :hephaestus_unique)
+    hephaestus_instance = Module.get_attribute(env.module, :hephaestus_instance)
     version = Module.get_attribute(env.module, :hephaestus_version)
 
     validate_tags!(tags)
     validate_metadata!(metadata)
+    unique = validate_unique!(unique_opts, env)
 
     unless is_integer(version) and version > 0 do
       raise CompileError,
@@ -523,12 +548,17 @@ defmodule Hephaestus.Workflow do
     predecessors_ast = Macro.escape(predecessors)
     edges_ast = Macro.escape(edges)
     metadata_ast = Macro.escape(metadata)
+    unique_ast = Macro.escape(unique)
 
     quote do
       @doc false
       def __tags__, do: unquote(tags)
       @doc false
       def __metadata__, do: unquote(metadata_ast)
+      @doc false
+      def __unique__, do: unquote(unique_ast)
+      @doc false
+      def __hephaestus__, do: unquote(hephaestus_instance)
       @doc false
       def __predecessors__(module), do: Map.get(unquote(predecessors_ast), module, MapSet.new())
       @doc false
@@ -551,6 +581,17 @@ defmodule Hephaestus.Workflow do
                 "it only supports version #{unquote(version)}, got: #{inspect(v)}"
       end
     end
+  end
+
+  defp validate_unique!(nil, env) do
+    raise CompileError,
+      file: env.file,
+      line: env.line,
+      description: "the :unique option is required for Hephaestus.Workflow"
+  end
+
+  defp validate_unique!(unique_opts, _env) do
+    Hephaestus.Workflow.Unique.new!(unique_opts)
   end
 
   defp extract_start!(env) do

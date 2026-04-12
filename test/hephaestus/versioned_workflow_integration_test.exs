@@ -13,7 +13,8 @@ defmodule Hephaestus.VersionedWorkflowIntegrationTest do
       {:ok, id} =
         Hephaestus.Test.Hephaestus.start_instance(
           Hephaestus.Test.Versioned,
-          %{}
+          %{},
+          id: "testversioned::default"
         )
 
       {:ok, instance} = get_instance(id)
@@ -26,6 +27,7 @@ defmodule Hephaestus.VersionedWorkflowIntegrationTest do
         Hephaestus.Test.Hephaestus.start_instance(
           Hephaestus.Test.Versioned,
           %{},
+          id: "testversioned::v1override",
           version: 1
         )
 
@@ -36,7 +38,10 @@ defmodule Hephaestus.VersionedWorkflowIntegrationTest do
 
     test "raises ArgumentError for non-existent version" do
       assert_raise ArgumentError, fn ->
-        Hephaestus.Test.Hephaestus.start_instance(Hephaestus.Test.Versioned, %{}, version: 99)
+        Hephaestus.Test.Hephaestus.start_instance(Hephaestus.Test.Versioned, %{},
+          id: "testversioned::bad",
+          version: 99
+        )
       end
     end
 
@@ -45,6 +50,7 @@ defmodule Hephaestus.VersionedWorkflowIntegrationTest do
         Hephaestus.Test.Hephaestus.start_instance(
           Hephaestus.Test.VersionedWithCallback,
           %{},
+          id: "testversionedcb::forcev1",
           force_v1: true
         )
 
@@ -56,7 +62,8 @@ defmodule Hephaestus.VersionedWorkflowIntegrationTest do
       {:ok, id} =
         Hephaestus.Test.Hephaestus.start_instance(
           Hephaestus.Test.VersionedWithCallback,
-          %{}
+          %{},
+          id: "testversionedcb::nilcb"
         )
 
       {:ok, instance} = get_instance(id)
@@ -67,7 +74,8 @@ defmodule Hephaestus.VersionedWorkflowIntegrationTest do
       {:ok, id} =
         Hephaestus.Test.Hephaestus.start_instance(
           Hephaestus.Test.V2.LinearWorkflow,
-          %{}
+          %{},
+          id: "testv2::nonversioned"
         )
 
       {:ok, instance} = get_instance(id)
