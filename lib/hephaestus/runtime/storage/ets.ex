@@ -138,8 +138,11 @@ defmodule Hephaestus.Runtime.Storage.ETS do
 
   defp matches_filters?(%Instance{} = instance, filters) do
     Enum.all?(filters, fn
+      {:id, id} -> instance.id == id
       {:status, status} -> instance.status == status
+      {:status_in, statuses} -> instance.status in statuses
       {:workflow, workflow} -> instance.workflow == workflow
+      {:workflow_version, workflow_version} -> instance.workflow_version == workflow_version
       {_key, _value} -> true
     end)
   end
