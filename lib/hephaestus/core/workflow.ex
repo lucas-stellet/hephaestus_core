@@ -474,6 +474,14 @@ defmodule Hephaestus.Workflow do
     metadata_ast = Macro.escape(metadata)
     unique_ast = Macro.escape(unique)
 
+    facade_ast =
+      facade_functions_quote(
+        unique,
+        quote(do: current_version()),
+        quote(do: Map.values(__versions__())),
+        hephaestus_instance
+      )
+
     quote do
       @doc false
       def __tags__, do: unquote(tags)
@@ -513,6 +521,8 @@ defmodule Hephaestus.Workflow do
       @doc false
       def version_for(_versions, _opts), do: nil
 
+      unquote(facade_ast)
+
       defoverridable version_for: 2
     end
   end
@@ -550,6 +560,14 @@ defmodule Hephaestus.Workflow do
     metadata_ast = Macro.escape(metadata)
     unique_ast = Macro.escape(unique)
 
+    facade_ast =
+      facade_functions_quote(
+        unique,
+        quote(do: __version__()),
+        quote(do: [__MODULE__]),
+        hephaestus_instance
+      )
+
     quote do
       @doc false
       def __tags__, do: unquote(tags)
@@ -580,8 +598,144 @@ defmodule Hephaestus.Workflow do
               "#{inspect(__MODULE__)} is not a versioned workflow; " <>
                 "it only supports version #{unquote(version)}, got: #{inspect(v)}"
       end
+
+      unquote(facade_ast)
     end
   end
+
+  defp facade_functions_quote(
+         %Hephaestus.Workflow.Unique{scope: :none},
+         _version_ast,
+         workflow_modules_ast,
+         hephaestus_instance
+       ) do
+    resolve_hephaestus_ast = resolve_hephaestus_quote(hephaestus_instance)
+
+    quote do
+      def start(value, context) when is_map(context) do
+        id = Hephaestus.Uniqueness.build_id_with_suffix(__unique__(), value)
+        apply(resolve_hephaestus(), :start_instance, [__MODULE__, context, [id: id]])
+      end
+
+      def list(filters \\ []) when is_list(filters) do
+        storage_query([{:workflow, __MODULE__} | filters])
+      end
+
+      defp resolve_hephaestus do
+        unquote(resolve_hephaestus_ast)
+      end
+
+      defp resolve_storage do
+        apply(resolve_hephaestus(), :__storage__, [])
+      end
+
+      defp storage_query(filters) do
+        {workflow_filter, filters} = Keyword.pop(filters, :workflow)
+        {mod, name} = resolve_storage()
+
+        mod.query(name, filters)
+        |> filter_instances_by_workflow(workflow_filter)
+      end
+
+      defp filter_instances_by_workflow(instances, nil), do: instances
+
+      defp filter_instances_by_workflow(instances, workflow) do
+        workflows =
+          if workflow == __MODULE__ do
+            unquote(workflow_modules_ast)
+          else
+            [workflow]
+          end
+
+        Enum.filter(instances, &(&1.workflow in workflows))
+      end
+    end
+  end
+
+  defp facade_functions_quote(_unique, version_ast, workflow_modules_ast, hephaestus_instance) do
+    active_statuses = [:pending, :running, :waiting]
+    resolve_hephaestus_ast = resolve_hephaestus_quote(hephaestus_instance)
+
+    quote do
+      def start(value, context) when is_map(context) do
+        hephaestus = resolve_hephaestus()
+        unique = __unique__()
+        id = Hephaestus.Uniqueness.build_id(unique, value)
+
+        with :ok <-
+               Hephaestus.Uniqueness.check(
+                 unique,
+                 id,
+                 __MODULE__,
+                 unquote(version_ast),
+                 &storage_query/1
+               ) do
+          apply(hephaestus, :start_instance, [__MODULE__, context, [id: id]])
+        end
+      end
+
+      def resume(value, event) do
+        id = Hephaestus.Uniqueness.build_id(__unique__(), value)
+        apply(resolve_hephaestus(), :resume, [id, event])
+      end
+
+      def get(value) do
+        {mod, name} = resolve_storage()
+        id = Hephaestus.Uniqueness.build_id(__unique__(), value)
+        mod.get(name, id)
+      end
+
+      def list(filters \\ []) when is_list(filters) do
+        storage_query([{:workflow, __MODULE__} | filters])
+      end
+
+      def cancel(value) do
+        {mod, name} = resolve_storage()
+        id = Hephaestus.Uniqueness.build_id(__unique__(), value)
+
+        with {:ok, instance} <- mod.get(name, id),
+             true <- instance.status in unquote(active_statuses) do
+          :ok = mod.put(name, %{instance | status: :cancelled})
+          :ok
+        else
+          false -> {:error, :not_cancellable}
+          {:error, :not_found} = error -> error
+        end
+      end
+
+      defp resolve_hephaestus do
+        unquote(resolve_hephaestus_ast)
+      end
+
+      defp resolve_storage do
+        apply(resolve_hephaestus(), :__storage__, [])
+      end
+
+      defp storage_query(filters) do
+        {workflow_filter, filters} = Keyword.pop(filters, :workflow)
+        {mod, name} = resolve_storage()
+
+        mod.query(name, filters)
+        |> filter_instances_by_workflow(workflow_filter)
+      end
+
+      defp filter_instances_by_workflow(instances, nil), do: instances
+
+      defp filter_instances_by_workflow(instances, workflow) do
+        workflows =
+          if workflow == __MODULE__ do
+            unquote(workflow_modules_ast)
+          else
+            [workflow]
+          end
+
+        Enum.filter(instances, &(&1.workflow in workflows))
+      end
+    end
+  end
+
+  defp resolve_hephaestus_quote(nil), do: quote(do: Hephaestus.Instances.lookup!())
+  defp resolve_hephaestus_quote(module), do: Macro.escape(module)
 
   defp validate_unique!(nil, env) do
     raise CompileError,

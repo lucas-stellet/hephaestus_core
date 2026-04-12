@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support `:id`, `:workflow_version`, and `:status_in` filters in the ETS storage adapter's `query/1` implementation.
 - `Hephaestus.Uniqueness.check/5` for scope-aware active-instance uniqueness checks via injected storage queries.
 - Required `:unique` workflow DSL option with generated `__unique__/0` and `__hephaestus__/0` introspection helpers.
+- Workflow facade generation for `start/2`, `resume/2`, `get/1`, `list/0-1`, and `cancel/1`, including `scope: :none` support and umbrella workflow storage resolution.
 
 ### Changed
 
