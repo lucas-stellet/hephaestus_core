@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New ETS storage query filters: `:id`, `:workflow_version`, `:status_in`.
 - `__unique__/0`, `__hephaestus__/0`, `__storage__/0` introspection functions.
 
+### Documentation
+
+- Updated README and getting-started guide with mandatory `unique:` option in all workflow examples.
+- Added business keys, uniqueness scopes, and facade API sections to README (English and Portuguese).
+- Added facade API and ID format rules section to getting-started guide.
+
 ### Changed
 
 - Breaking: `Instance.new` now requires explicit ID parameter (no more auto-generated UUID).

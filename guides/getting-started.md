@@ -56,11 +56,12 @@ Return values from `execute/3`:
 
 ## Step 3: Define a workflow
 
-A workflow declares the starting step and transitions between steps using pattern matching. Use `use Hephaestus.Workflow` and implement `start/0` and `transit/3`:
+A workflow declares a business key, the starting step, and transitions between steps using pattern matching. Use `use Hephaestus.Workflow` with the mandatory `unique` option and implement `start/0` and `transit/3`:
 
 ```elixir
 defmodule MyApp.Workflows.OrderFlow do
-  use Hephaestus.Workflow
+  use Hephaestus.Workflow,
+    unique: [key: "orderid"]
 
   alias MyApp.Steps.{ValidateOrder, ChargePayment, SendConfirmation}
 
@@ -75,6 +76,8 @@ defmodule MyApp.Workflows.OrderFlow do
 end
 ```
 
+The `unique: [key: "orderid"]` option is mandatory. It declares the business key used to identify instances — for example, starting with value `"abc123"` produces the stored ID `"orderid::abc123"`. The key must be lowercase alphanumeric only (`[a-z0-9]`).
+
 Every path must end at `Hephaestus.Steps.Done`. The workflow DAG is validated at compile time — cycles, unreachable steps, and missing transitions all raise `CompileError`.
 
 ### Tags and metadata (optional)
@@ -84,6 +87,7 @@ Workflows can declare tags and metadata for observability. Runner adapters (like
 ```elixir
 defmodule MyApp.Workflows.OrderFlow do
   use Hephaestus.Workflow,
+    unique: [key: "orderid"],
     tags: ["orders", "checkout"],
     metadata: %{"team" => "payments", "priority" => "high"}
 
@@ -124,10 +128,21 @@ This starts a Registry, DynamicSupervisor, TaskSupervisor, and the ETS storage a
 
 ## Step 5: Run a workflow
 
+The preferred way to start a workflow is through the generated facade API on the workflow module:
+
+```elixir
+{:ok, "orderid::order42"} = MyApp.Workflows.OrderFlow.start("order42", %{items: ["widget", "gadget"]})
+```
+
+The first argument is the business key value. It must be lowercase alphanumeric (`[a-z0-9]`) or a valid UUID (with hyphens in `8-4-4-4-12` format). The facade builds the composite ID (`"orderid::order42"`) and handles uniqueness checks automatically.
+
+You can also use the lower-level API with an explicit `id:` option:
+
 ```elixir
 {:ok, instance_id} = MyApp.Hephaestus.start_instance(
   MyApp.Workflows.OrderFlow,
-  %{items: ["widget", "gadget"]}
+  %{items: ["widget", "gadget"]},
+  id: "orderid::order42"
 )
 ```
 
@@ -158,10 +173,16 @@ In your workflow:
 def transit(WaitForPayment, :payment_confirmed, _ctx), do: FulfillOrder
 ```
 
-When the external event arrives (webhook, message, etc.), resume the instance:
+When the external event arrives (webhook, message, etc.), resume via the facade:
 
 ```elixir
-:ok = MyApp.Hephaestus.resume(instance_id, :payment_confirmed)
+:ok = MyApp.Workflows.OrderFlow.resume("order42", :payment_confirmed)
+```
+
+Or via the lower-level API with the full composite ID:
+
+```elixir
+:ok = MyApp.Hephaestus.resume("orderid::order42", :payment_confirmed)
 ```
 
 The workflow picks up from where it paused and continues executing.
@@ -237,7 +258,8 @@ end
 
 # lib/my_app/workflows/checkout.ex
 defmodule MyApp.Workflows.Checkout do
-  use Hephaestus.Workflow
+  use Hephaestus.Workflow,
+    unique: [key: "orderid"]
 
   alias MyApp.Steps.{Validate, ProcessPayment, Notify}
 
@@ -260,7 +282,7 @@ end
 Run it:
 
 ```elixir
-{:ok, id} = MyApp.Hephaestus.start_instance(MyApp.Workflows.Checkout, %{amount: 4999})
+{:ok, "orderid::checkout99"} = MyApp.Workflows.Checkout.start("checkout99", %{amount: 4999})
 # => "Payment of 4999 processed!"
 ```
 
@@ -272,6 +294,39 @@ Each step receives a `Hephaestus.Core.Context` struct with two fields:
 - `context.steps` — results from completed steps, keyed by step name (e.g., `context.steps.validate`)
 
 Step names are derived from the last segment of the module name, underscored. `MyApp.Steps.ProcessPayment` becomes `:process_payment`. Override this with the optional `step_key/0` callback.
+
+## Facade API
+
+Every workflow module with a `unique` declaration gets generated facade functions. These are the preferred way to interact with workflows — callers only pass the raw business value, and the facade handles ID construction and uniqueness checks:
+
+```elixir
+# Start a workflow instance
+{:ok, "orderid::abc123"} = MyApp.Workflows.OrderFlow.start("abc123", %{items: ["widget"]})
+
+# Resume an async workflow
+:ok = MyApp.Workflows.OrderFlow.resume("abc123", :payment_confirmed)
+
+# Fetch an instance
+{:ok, instance} = MyApp.Workflows.OrderFlow.get("abc123")
+
+# List instances (with optional filters)
+instances = MyApp.Workflows.OrderFlow.list(status: :running)
+
+# Cancel an active instance
+:ok = MyApp.Workflows.OrderFlow.cancel("abc123")
+```
+
+Starting a duplicate instance within the uniqueness scope returns `{:error, :already_running}`.
+
+### Business key ID format
+
+The instance ID follows the format `"key::value"` where:
+
+- **Key**: declared in `unique: [key: "..."]`, lowercase alphanumeric only (`[a-z0-9]`)
+- **Value**: the caller-provided business identifier, either lowercase alphanumeric (`[a-z0-9]`) or a valid UUID with hyphens (`550e8400-e29b-41d4-a716-446655440000`)
+- **Separator**: `::` (reserved, cannot appear in keys or values)
+
+The `scope` option (default `:workflow`) controls uniqueness enforcement. See the README for all available scopes.
 
 ## Next steps
 

@@ -63,6 +63,26 @@ applications compose them through `use Hephaestus`.
 
 ## Core modules
 
+### Uniqueness (`Hephaestus.Uniqueness`)
+
+Handles composite ID construction, validation, and uniqueness checking for
+workflow instances. Every workflow declares a mandatory business key via the
+`unique` option, and this module encapsulates the logic around it.
+
+Key responsibilities:
+
+- **`build_id/2`** — constructs a composite ID in `"key::value"` format from
+  the workflow's `%Unique{}` config and the caller-provided value.
+- **`build_id_with_suffix/2`** — same format with a random suffix, used when
+  `scope: :none` (e.g., `"userid::abc123::a1b2c3d4"`).
+- **`validate_value!/1`** — ensures the caller value is `[a-z0-9]+` or a valid UUID.
+- **`check/5`** — queries storage to enforce uniqueness within the configured scope.
+  Returns `:ok` or `{:error, :already_running}`.
+- **`extract_value/1`** — extracts the raw business value from a composite ID.
+
+The composite ID format uses `::` as separator: `"key::value"`. The key portion
+is `[a-z0-9]+` (set at compile time), and the value is `[a-z0-9]+` or a UUID.
+
 ### Instance (`Hephaestus.Core.Instance`)
 
 The central data structure. An Instance is a snapshot of a workflow execution at
@@ -70,7 +90,7 @@ a point in time:
 
 | Field               | Type                  | Purpose                                     |
 |---------------------|-----------------------|---------------------------------------------|
-| `id`                | string                | Caller-supplied unique identifier            |
+| `id`                | string                | Composite business ID (`"key::value"`)       |
 | `workflow`          | module                | The workflow module being executed            |
 | `workflow_version`  | positive integer      | Resolved workflow definition version          |
 | `status`            | atom                  | Lifecycle state (see below)                  |
@@ -85,7 +105,8 @@ a point in time:
 | `execution_history` | list of ExecutionEntry| Audit trail                                  |
 
 Instances are created via `Instance.new/4`, which requires the workflow module,
-resolved version, initial context, and an explicit instance ID. Instances are
+resolved version, initial context, and an explicit composite ID (built by
+`Hephaestus.Uniqueness`). Auto-generated UUIDs are no longer used. Instances are
 plain structs — the Instance module has no process or side effect.
 
 ### Context (`Hephaestus.Core.Context`)
@@ -141,7 +162,8 @@ When you write:
 
 ```elixir
 defmodule MyApp.Workflows.OrderFlow do
-  use Hephaestus.Workflow
+  use Hephaestus.Workflow,
+    unique: [key: "orderid"]
 
   def start, do: ValidateOrder
 
@@ -160,12 +182,13 @@ At compile time, the macro:
    keys, JSON-safe values), stores as module attributes.
 4. Calls `Hephaestus.Core.Workflow.validate!/4` which builds a `libgraph`
    digraph and runs six validations.
-5. Generates `__tags__/0`, `__metadata__/0`, `__predecessors__/1`, `__graph__/0`,
-   `__edges__/0`, `__version__/0`, `__versioned__?/0`, and `resolve_version/1`
-   into standard workflow modules for runtime use. Umbrella version-dispatcher
-   modules instead generate `__versions__/0`, `current_version/0`,
-   `version_for/2`, `__version__/0` (`nil`), `__versioned__?/0`, and
-   `resolve_version/1`.
+5. Validates the mandatory `unique` option and stores the `%Unique{}` struct.
+6. Generates `__tags__/0`, `__metadata__/0`, `__unique__/0`,
+   `__predecessors__/1`, `__graph__/0`, `__edges__/0`, `__version__/0`,
+   `__versioned__?/0`, and `resolve_version/1` into standard workflow modules
+   for runtime use. Umbrella version-dispatcher modules additionally generate
+   `__versions__/0`, `current_version/0`, `version_for/2`, and facade
+   functions (`start/2`, `resume/2`, `get/1`, `list/1`, `cancel/1`).
 
 ### ExecutionEntry (`Hephaestus.Core.ExecutionEntry`)
 
@@ -384,6 +407,44 @@ This separation keeps the engine pure and makes external dependencies explicit
 and testable. A step can inject a connector module via its config, making it
 straightforward to swap a real connector for a test double.
 
+## Workflow facade
+
+Umbrella workflow modules (and standalone workflows with `unique`) get
+auto-generated facade functions that hide ID construction and instance lookup
+from the caller:
+
+| Function | Signature | Description |
+|---|---|---|
+| `start/2` | `start(value, context)` | Builds the composite ID, checks uniqueness, delegates to `start_instance` |
+| `resume/2` | `resume(value, event)` | Builds the composite ID, delegates to `resume` |
+| `get/1` | `get(value)` | Builds the composite ID, fetches from storage |
+| `list/1` | `list(filters \\ [])` | Queries storage filtered to this workflow |
+| `cancel/1` | `cancel(value)` | Builds the composite ID, cancels the instance |
+
+With `scope: :none`, only `start/2` and `list/1` are generated (the others
+would be ambiguous with multiple instances sharing the same value).
+
+Facade functions discover the running `MyApp.Hephaestus` module automatically
+via `Hephaestus.Instances.lookup!/0`. In multi-instance setups, pass
+`hephaestus: MyApp.Hephaestus` in the workflow's `use` options.
+
+## Instance registry (`Hephaestus.Instances`)
+
+`Hephaestus.Instances` is an auto-discovery registry that lets workflow facade
+functions find the running Hephaestus module without explicit configuration. It
+uses Elixir's `Registry` (same pattern as Oban).
+
+- **`Hephaestus.Instances`** — starts a global `Registry` as part of the
+  `hephaestus_core` application. Provides `register/1` and `lookup!/0`.
+- **`Hephaestus.Instances.Tracker`** — a GenServer started as a child of each
+  `MyApp.Hephaestus` supervision tree. On init, it calls
+  `Hephaestus.Instances.register/1` to register the Hephaestus module. When the
+  process stops, the Registry cleans up automatically.
+
+`lookup!/0` returns the single registered module. If zero are registered it
+raises. If multiple are registered it raises, instructing the caller to pass the
+`hephaestus:` option explicitly.
+
 ## Supervision tree
 
 When you `use Hephaestus` and add the module to your application supervisor,
@@ -395,11 +456,13 @@ MyApp.Hephaestus (Supervisor, :one_for_one)
   |-- MyApp.Hephaestus.DynamicSupervisor (DynamicSupervisor)
   |-- MyApp.Hephaestus.TaskSupervisor (Task.Supervisor)
   |-- MyApp.Hephaestus.Storage (Storage adapter, e.g., ETS)
+  |-- Hephaestus.Instances.Tracker (GenServer — registers this module)
 ```
 
 Each workflow instance is a transient child under the `DynamicSupervisor`,
 registered by instance ID in the `Registry`. The `TaskSupervisor` runs
-concurrent step executions.
+concurrent step executions. The `Instances.Tracker` registers this Hephaestus
+module in the global `Hephaestus.Instances` registry for facade discovery.
 
 ## Extension adapters
 

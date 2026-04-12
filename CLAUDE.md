@@ -79,6 +79,45 @@ You do **not** need `@disable_ddl_transaction` or `@disable_migration_lock` — 
    ```
    This prevents concurrent migration attempts from conflicting. See the [safe-ecto-migrations guide](https://github.com/fly-apps/safe-ecto-migrations) for details.
 
+### Business Keys and Workflow Identity (0.3.0+)
+
+Every workflow must declare a business key via the `:unique` option:
+
+```elixir
+defmodule MyApp.Workflows.OrderFlow do
+  use Hephaestus.Workflow,
+    unique: [key: "orderid"]
+end
+```
+
+**Key rules:**
+- `key` format: lowercase letters and numbers only (`[a-z0-9]+`)
+- Instance IDs are composite: `"key::value"` (e.g., `"orderid::abc123"`)
+- Values: `[a-z0-9]+` or valid UUIDs (hyphens only in UUID format)
+- `::` is a reserved separator
+
+**Uniqueness scopes:**
+- `:workflow` (default) — one active instance per ID per workflow module
+- `:version` — one per ID per workflow version (allows V1 and V2 to coexist)
+- `:global` — one per ID across all workflows
+- `:none` — business key for identity, no uniqueness constraint
+
+**Workflow facade:** Workflows generate `start/2`, `resume/2`, `get/1`, `list/1`, `cancel/1`:
+
+```elixir
+{:ok, id} = OrderFlow.start("abc123", %{amount: 100})
+:ok = OrderFlow.resume("abc123", :payment_confirmed)
+{:ok, instance} = OrderFlow.get("abc123")
+```
+
+**Auto-discovery:** The Hephaestus module registers itself at boot via `Hephaestus.Instances`. Workflows find it automatically. For the rare case of multiple Hephaestus instances, pass `hephaestus: MyApp.Hephaestus` in the workflow's `use` options.
+
+**`start_instance` requires `id:`:**
+
+```elixir
+{:ok, id} = MyApp.Hephaestus.start_instance(OrderFlow, %{amount: 100}, id: "orderid::abc123")
+```
+
 ### Adding a new migration version to the extensions
 
 When developing a new schema change for hephaestus_ecto or hephaestus_oban:

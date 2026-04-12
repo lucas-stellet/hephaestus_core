@@ -74,11 +74,12 @@ Steps return one of:
 
 ### 3. Define a Workflow
 
-Workflows declare a start step and transitions via pattern matching:
+Workflows declare a start step, a business key via `unique`, and transitions between steps using pattern matching:
 
 ```elixir
 defmodule MyApp.Workflows.OrderFlow do
-  use Hephaestus.Workflow
+  use Hephaestus.Workflow,
+    unique: [key: "orderid"]
 
   @impl true
   def start, do: MyApp.Steps.ValidateOrder
@@ -91,14 +92,23 @@ defmodule MyApp.Workflows.OrderFlow do
 end
 ```
 
-The compiler validates the entire DAG at build time — if a path doesn't reach `Hephaestus.Steps.Done`, or if events don't match step declarations, you'll get a compile error.
+The `unique: [key: "orderid"]` option is mandatory. It declares the business key used to identify instances (e.g., stored ID becomes `"orderid::abc123"`). The compiler validates the entire DAG at build time — if a path doesn't reach `Hephaestus.Steps.Done`, or if events don't match step declarations, you'll get a compile error.
 
 ### 4. Run It
+
+Use the generated facade API on the workflow module — this is the preferred way to interact with workflows:
+
+```elixir
+{:ok, "orderid::abc123"} = MyApp.Workflows.OrderFlow.start("abc123", %{item_count: 3, user_id: 42})
+```
+
+Or use the lower-level `start_instance` with an explicit `id:` option:
 
 ```elixir
 {:ok, instance_id} = MyApp.Hephaestus.start_instance(
   MyApp.Workflows.OrderFlow,
-  %{item_count: 3, user_id: 42}
+  %{item_count: 3, user_id: 42},
+  id: "orderid::abc123"
 )
 ```
 
@@ -107,7 +117,10 @@ The compiler validates the entire DAG at build time — if a path doesn't reach 
 For steps that return `{:async}`, resume them with an external event:
 
 ```elixir
-:ok = MyApp.Hephaestus.resume(instance_id, :payment_confirmed)
+:ok = MyApp.Workflows.OrderFlow.resume("abc123", :payment_confirmed)
+
+# Or via the lower-level API:
+:ok = MyApp.Hephaestus.resume("orderid::abc123", :payment_confirmed)
 ```
 
 ## Workflow Patterns
@@ -153,6 +166,38 @@ def transit(Hephaestus.Steps.Wait, :timeout, _ctx), do: StepB
 def transit(StepA, :done, _ctx), do: Hephaestus.Steps.WaitForEvent
 def transit(Hephaestus.Steps.WaitForEvent, :received, _ctx), do: StepB
 ```
+
+## Business Keys and Uniqueness
+
+Every workflow must declare a business key via `unique: [key: "..."]`. The key becomes the ID prefix for all instances: `"orderid::abc123"`.
+
+The `scope` option controls where uniqueness is enforced (default: `:workflow`):
+
+| Scope | Uniqueness per | Use case |
+|-------|---------------|----------|
+| `:workflow` | `{id, workflow_module}` | One active instance per workflow (most common) |
+| `:version` | `{id, workflow_module, version}` | Blue-green deploys with parallel versions |
+| `:global` | `{id}` | Exclusive resource lock across all workflows |
+| `:none` | No constraint | Multiple concurrent instances (e.g., notifications) |
+
+```elixir
+use Hephaestus.Workflow,
+  unique: [key: "blueprintid", scope: :workflow]
+```
+
+### Facade API
+
+Each workflow module gets generated facade functions for convenient interaction:
+
+```elixir
+MyWorkflow.start("abc123", %{amount: 100})   # -> {:ok, "orderid::abc123"}
+MyWorkflow.resume("abc123", :payment_done)    # -> :ok
+MyWorkflow.get("abc123")                      # -> {:ok, %Instance{}}
+MyWorkflow.list(status: :running)             # -> [%Instance{}, ...]
+MyWorkflow.cancel("abc123")                   # -> :ok
+```
+
+The facade builds the composite ID internally — callers only pass the raw business value.
 
 ## Architecture
 
@@ -276,11 +321,12 @@ Steps retornam um dos seguintes:
 
 ### 3. Defina um Workflow
 
-Workflows declaram um step inicial e transicoes via pattern matching:
+Workflows declaram um step inicial, uma business key via `unique`, e transicoes via pattern matching:
 
 ```elixir
 defmodule MyApp.Workflows.OrderFlow do
-  use Hephaestus.Workflow
+  use Hephaestus.Workflow,
+    unique: [key: "orderid"]
 
   @impl true
   def start, do: MyApp.Steps.ValidateOrder
@@ -293,14 +339,23 @@ defmodule MyApp.Workflows.OrderFlow do
 end
 ```
 
-O compilador valida o DAG inteiro em build time — se um caminho nao chega ao `Hephaestus.Steps.Done`, ou se os eventos nao correspondem as declaracoes dos steps, voce recebe um erro de compilacao.
+A opcao `unique: [key: "orderid"]` e obrigatoria. Ela declara a business key usada para identificar instancias (ex: o ID armazenado sera `"orderid::abc123"`). O compilador valida o DAG inteiro em build time — se um caminho nao chega ao `Hephaestus.Steps.Done`, ou se os eventos nao correspondem as declaracoes dos steps, voce recebe um erro de compilacao.
 
 ### 4. Execute
+
+Use a facade API gerada no modulo do workflow — esta e a forma preferida de interagir com workflows:
+
+```elixir
+{:ok, "orderid::abc123"} = MyApp.Workflows.OrderFlow.start("abc123", %{item_count: 3, user_id: 42})
+```
+
+Ou use a API de baixo nivel com a opcao `id:` explicita:
 
 ```elixir
 {:ok, instance_id} = MyApp.Hephaestus.start_instance(
   MyApp.Workflows.OrderFlow,
-  %{item_count: 3, user_id: 42}
+  %{item_count: 3, user_id: 42},
+  id: "orderid::abc123"
 )
 ```
 
@@ -309,7 +364,10 @@ O compilador valida o DAG inteiro em build time — se um caminho nao chega ao `
 Para steps que retornam `{:async}`, retome-os com um evento externo:
 
 ```elixir
-:ok = MyApp.Hephaestus.resume(instance_id, :payment_confirmed)
+:ok = MyApp.Workflows.OrderFlow.resume("abc123", :payment_confirmed)
+
+# Ou via API de baixo nivel:
+:ok = MyApp.Hephaestus.resume("orderid::abc123", :payment_confirmed)
 ```
 
 ## Padroes de Workflow
@@ -355,6 +413,33 @@ def transit(Hephaestus.Steps.Wait, :timeout, _ctx), do: StepB
 def transit(StepA, :done, _ctx), do: Hephaestus.Steps.WaitForEvent
 def transit(Hephaestus.Steps.WaitForEvent, :received, _ctx), do: StepB
 ```
+
+## Business Keys e Unicidade
+
+Todo workflow deve declarar uma business key via `unique: [key: "..."]`. A key se torna o prefixo do ID de todas as instancias: `"orderid::abc123"`.
+
+A opcao `scope` controla onde a unicidade e aplicada (padrao: `:workflow`):
+
+| Scope | Unicidade por | Caso de uso |
+|-------|--------------|-------------|
+| `:workflow` | `{id, workflow_module}` | Uma instancia ativa por workflow (mais comum) |
+| `:version` | `{id, workflow_module, version}` | Deploys blue-green com versoes paralelas |
+| `:global` | `{id}` | Lock exclusivo de recurso entre todos os workflows |
+| `:none` | Sem restricao | Multiplas instancias simultaneas (ex: notificacoes) |
+
+### Facade API
+
+Cada modulo de workflow ganha funcoes facade geradas automaticamente:
+
+```elixir
+MyWorkflow.start("abc123", %{amount: 100})   # -> {:ok, "orderid::abc123"}
+MyWorkflow.resume("abc123", :payment_done)    # -> :ok
+MyWorkflow.get("abc123")                      # -> {:ok, %Instance{}}
+MyWorkflow.list(status: :running)             # -> [%Instance{}, ...]
+MyWorkflow.cancel("abc123")                   # -> :ok
+```
+
+A facade constroi o ID composto internamente — o caller passa apenas o valor de negocio.
 
 ## Arquitetura
 
