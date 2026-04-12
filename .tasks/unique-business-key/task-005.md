@@ -42,11 +42,91 @@ Test with instances that have explicit IDs (use `"test::abc"` format since Insta
 4. Combined filters: `:id` + `:workflow` + `:status_in`
 5. Empty filters still return all instances
 
+## TDD Test Sequence
+
+**Test file:** `test/hephaestus/runtime/storage/ets_test.exs` (add new describe blocks)
+
+Add these tests to the existing ETS test file. Use `%Instance{}` struct literals to create fixtures (avoids dependency on `Instance.new` changes from task-004 which runs in parallel).
+
+```elixir
+# Add to existing ETSTest module
+
+describe "query/1 with :id filter" do
+  test "returns instance matching exact ID", %{storage: storage} do
+    # Arrange
+    instance_a = %Instance{id: "test::abc", workflow: TestWorkflow, workflow_version: 1, status: :pending, context: %Hephaestus.Core.Context{initial: %{}, steps: %{}}, step_configs: %{}, active_steps: MapSet.new(), completed_steps: MapSet.new(), runtime_metadata: %{}, execution_history: [], telemetry_metadata: %{}, telemetry_start_time: nil}
+    instance_b = %Instance{id: "test::def", workflow: TestWorkflow, workflow_version: 1, status: :pending, context: %Hephaestus.Core.Context{initial: %{}, steps: %{}}, step_configs: %{}, active_steps: MapSet.new(), completed_steps: MapSet.new(), runtime_metadata: %{}, execution_history: [], telemetry_metadata: %{}, telemetry_start_time: nil}
+    :ok = ETSStorage.put(storage, instance_a)
+    :ok = ETSStorage.put(storage, instance_b)
+
+    # Act
+    results = ETSStorage.query(storage, id: "test::abc")
+
+    # Assert
+    assert length(results) == 1
+    assert hd(results).id == "test::abc"
+  end
+end
+
+describe "query/1 with :status_in filter" do
+  test "returns instances matching any of the given statuses", %{storage: storage} do
+    # Arrange
+    pending = %Instance{id: "test::s1", workflow: TestWorkflow, workflow_version: 1, status: :pending, context: %Hephaestus.Core.Context{initial: %{}, steps: %{}}, step_configs: %{}, active_steps: MapSet.new(), completed_steps: MapSet.new(), runtime_metadata: %{}, execution_history: [], telemetry_metadata: %{}, telemetry_start_time: nil}
+    running = %Instance{id: "test::s2", workflow: TestWorkflow, workflow_version: 1, status: :running, context: %Hephaestus.Core.Context{initial: %{}, steps: %{}}, step_configs: %{}, active_steps: MapSet.new(), completed_steps: MapSet.new(), runtime_metadata: %{}, execution_history: [], telemetry_metadata: %{}, telemetry_start_time: nil}
+    completed = %Instance{id: "test::s3", workflow: TestWorkflow, workflow_version: 1, status: :completed, context: %Hephaestus.Core.Context{initial: %{}, steps: %{}}, step_configs: %{}, active_steps: MapSet.new(), completed_steps: MapSet.new(), runtime_metadata: %{}, execution_history: [], telemetry_metadata: %{}, telemetry_start_time: nil}
+    :ok = ETSStorage.put(storage, pending)
+    :ok = ETSStorage.put(storage, running)
+    :ok = ETSStorage.put(storage, completed)
+
+    # Act
+    results = ETSStorage.query(storage, status_in: [:pending, :running])
+
+    # Assert
+    assert length(results) == 2
+    assert Enum.all?(results, & &1.status in [:pending, :running])
+  end
+end
+
+describe "query/1 with :workflow_version filter" do
+  test "returns instances matching the given version", %{storage: storage} do
+    # Arrange
+    v1 = %Instance{id: "test::v1", workflow: TestWorkflow, workflow_version: 1, status: :pending, context: %Hephaestus.Core.Context{initial: %{}, steps: %{}}, step_configs: %{}, active_steps: MapSet.new(), completed_steps: MapSet.new(), runtime_metadata: %{}, execution_history: [], telemetry_metadata: %{}, telemetry_start_time: nil}
+    v2 = %Instance{id: "test::v2", workflow: TestWorkflow, workflow_version: 2, status: :pending, context: %Hephaestus.Core.Context{initial: %{}, steps: %{}}, step_configs: %{}, active_steps: MapSet.new(), completed_steps: MapSet.new(), runtime_metadata: %{}, execution_history: [], telemetry_metadata: %{}, telemetry_start_time: nil}
+    :ok = ETSStorage.put(storage, v1)
+    :ok = ETSStorage.put(storage, v2)
+
+    # Act
+    results = ETSStorage.query(storage, workflow_version: 2)
+
+    # Assert
+    assert length(results) == 1
+    assert hd(results).workflow_version == 2
+  end
+end
+
+describe "query/1 with combined filters" do
+  test "applies all filters with AND semantics", %{storage: storage} do
+    # Arrange
+    target = %Instance{id: "test::target", workflow: WorkflowA, workflow_version: 2, status: :waiting, context: %Hephaestus.Core.Context{initial: %{}, steps: %{}}, step_configs: %{}, active_steps: MapSet.new(), completed_steps: MapSet.new(), runtime_metadata: %{}, execution_history: [], telemetry_metadata: %{}, telemetry_start_time: nil}
+    decoy1 = %Instance{id: "test::target", workflow: WorkflowB, workflow_version: 2, status: :waiting, context: %Hephaestus.Core.Context{initial: %{}, steps: %{}}, step_configs: %{}, active_steps: MapSet.new(), completed_steps: MapSet.new(), runtime_metadata: %{}, execution_history: [], telemetry_metadata: %{}, telemetry_start_time: nil}
+    decoy2 = %Instance{id: "test::other", workflow: WorkflowA, workflow_version: 2, status: :completed, context: %Hephaestus.Core.Context{initial: %{}, steps: %{}}, step_configs: %{}, active_steps: MapSet.new(), completed_steps: MapSet.new(), runtime_metadata: %{}, execution_history: [], telemetry_metadata: %{}, telemetry_start_time: nil}
+    :ok = ETSStorage.put(storage, target)
+    :ok = ETSStorage.put(storage, decoy1)
+    :ok = ETSStorage.put(storage, decoy2)
+
+    # Act
+    results = ETSStorage.query(storage, id: "test::target", workflow: WorkflowA, status_in: [:waiting])
+
+    # Assert
+    assert length(results) == 1
+    assert hd(results).id == "test::target"
+    assert hd(results).workflow == WorkflowA
+  end
+end
+```
+
 ## Done when
 
-- [ ] `query(id: "test::abc")` returns only the matching instance
-- [ ] `query(status_in: [:running, :waiting])` returns instances with those statuses
-- [ ] `query(workflow_version: 2)` filters by version
-- [ ] Combined filters work with AND semantics
-- [ ] Existing `:status` and `:workflow` filters still work
-- [ ] All tests pass
+- [ ] All 4 new test groups pass
+- [ ] Existing ETS tests still pass (no regressions)
+- [ ] `mix test test/hephaestus/runtime/storage/ets_test.exs` green

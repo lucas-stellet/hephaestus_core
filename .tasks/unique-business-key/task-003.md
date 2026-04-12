@@ -45,13 +45,119 @@ The `Hephaestus.Instances` registry must start in the `Hephaestus.Application`. 
 
 **Note:** Do NOT modify `lib/hephaestus.ex` in this task. The Tracker is added to the supervision tree in task-008.
 
+## TDD Test Sequence
+
+**Test file:** `test/hephaestus/instances_test.exs`
+
+```elixir
+defmodule Hephaestus.InstancesTest do
+  use ExUnit.Case, async: false
+
+  alias Hephaestus.Instances
+  alias Hephaestus.Instances.Tracker
+
+  setup do
+    # Ensure a clean registry for each test.
+    # The Application starts Hephaestus.Instances globally,
+    # so we need to clean up any registrations between tests.
+    on_exit(fn ->
+      # Kill any tracker processes that may be lingering
+      for {pid, _} <- Registry.lookup(Hephaestus.Instances.Registry, :_) do
+        Process.exit(pid, :kill)
+      end
+      Process.sleep(10)
+    end)
+
+    :ok
+  end
+
+  describe "lookup!/0 with no registrations" do
+    test "raises when no Hephaestus instance is registered" do
+      # Arrange — nothing registered
+
+      # Act / Assert
+      assert_raise RuntimeError, ~r/No Hephaestus instance running/, fn ->
+        Instances.lookup!()
+      end
+    end
+  end
+
+  describe "Tracker registration" do
+    test "registers module on start_link" do
+      # Arrange
+      {:ok, _pid} = Tracker.start_link(MyApp.TestHephaestus)
+
+      # Act
+      result = Instances.lookup!()
+
+      # Assert
+      assert result == MyApp.TestHephaestus
+    end
+  end
+
+  describe "lookup!/0 with single registration" do
+    test "returns the registered module" do
+      # Arrange
+      {:ok, _pid} = Tracker.start_link(MyApp.SingleInstance)
+
+      # Act
+      module = Instances.lookup!()
+
+      # Assert
+      assert module == MyApp.SingleInstance
+    end
+  end
+
+  describe "lookup!/0 with multiple registrations" do
+    test "raises listing all registered modules" do
+      # Arrange
+      {:ok, _pid1} = Tracker.start_link(MyApp.InstanceA)
+      {:ok, _pid2} = Tracker.start_link(MyApp.InstanceB)
+
+      # Act / Assert
+      assert_raise RuntimeError, ~r/Multiple Hephaestus instances/, fn ->
+        Instances.lookup!()
+      end
+    end
+  end
+
+  describe "auto-deregistration" do
+    test "deregisters when tracker process is killed" do
+      # Arrange
+      {:ok, pid} = Tracker.start_link(MyApp.Ephemeral)
+      assert Instances.lookup!() == MyApp.Ephemeral
+
+      # Act
+      Process.exit(pid, :kill)
+      Process.sleep(50)
+
+      # Assert
+      assert_raise RuntimeError, ~r/No Hephaestus instance running/, fn ->
+        Instances.lookup!()
+      end
+    end
+
+    test "deregisters when tracker process stops normally" do
+      # Arrange
+      {:ok, pid} = Tracker.start_link(MyApp.Graceful)
+      assert Instances.lookup!() == MyApp.Graceful
+
+      # Act
+      GenServer.stop(pid, :normal)
+      Process.sleep(50)
+
+      # Assert
+      assert_raise RuntimeError, ~r/No Hephaestus instance running/, fn ->
+        Instances.lookup!()
+      end
+    end
+  end
+end
+```
+
 ## Done when
 
-- [ ] `Hephaestus.Instances` can be started as a supervisor child
-- [ ] `Tracker.start_link(MyModule)` registers the module
-- [ ] `lookup!/0` returns the registered module when exactly one exists
-- [ ] `lookup!/0` raises with clear message when none registered
-- [ ] `lookup!/0` raises with module list when multiple registered
-- [ ] Killing the Tracker process deregisters the module (Registry cleanup)
+- [ ] All 6 tests pass
 - [ ] `Hephaestus.Application` starts the Instances registry
-- [ ] All tests pass
+- [ ] No compilation warnings
+- [ ] `mix test test/hephaestus/instances_test.exs` green

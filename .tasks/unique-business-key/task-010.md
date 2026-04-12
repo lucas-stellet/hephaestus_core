@@ -126,15 +126,174 @@ Create test workflows WITH `unique:` configured, start them via facade, and veri
 7. `MyWorkflow.start("abc123", ctx)` with `:reject` scope returns `{:error, :already_running}` on duplicate
 8. `scope: :none` — start works, resume/get/cancel not available
 
+## TDD Test Sequence
+
+**Test file:** `test/hephaestus/core/workflow_facade_test.exs`
+
+This test requires a running Hephaestus supervision tree. Use `Hephaestus.Test.Hephaestus` (started in test setup). Define inline test workflows with `unique:`.
+
+```elixir
+defmodule Hephaestus.Core.WorkflowFacadeTest do
+  use ExUnit.Case, async: false
+
+  # Test workflows defined inline — these need unique: and proper steps
+  # They are defined in test/support/ or inline via Code.compile_quoted
+
+  describe "start/2" do
+    test "creates instance with composite ID" do
+      # Arrange — workflow with unique: [key: "facadetest"]
+      # Act
+      {:ok, id} = TestFacadeWorkflow.start("abc123", %{data: true})
+
+      # Assert
+      assert id == "facadetest::abc123"
+    end
+
+    test "rejects duplicate when scope is :workflow" do
+      # Arrange
+      {:ok, _} = TestFacadeWorkflow.start("dup1", %{})
+
+      # Act
+      result = TestFacadeWorkflow.start("dup1", %{})
+
+      # Assert
+      assert result == {:error, :already_running}
+    end
+
+    test "validates value format" do
+      # Arrange / Act / Assert
+      assert_raise ArgumentError, ~r/invalid id value/, fn ->
+        TestFacadeWorkflow.start("INVALID", %{})
+      end
+    end
+  end
+
+  describe "resume/2" do
+    test "resumes instance by business value" do
+      # Arrange — start a workflow that waits for event
+      {:ok, _id} = TestFacadeEventWorkflow.start("res1", %{})
+      Process.sleep(50)  # let it advance to waiting
+
+      # Act
+      result = TestFacadeEventWorkflow.resume("res1", :payment_confirmed)
+
+      # Assert
+      assert result == :ok
+    end
+  end
+
+  describe "get/1" do
+    test "returns instance by business value" do
+      # Arrange
+      {:ok, _} = TestFacadeWorkflow.start("get1", %{data: 42})
+
+      # Act
+      result = TestFacadeWorkflow.get("get1")
+
+      # Assert
+      assert {:ok, instance} = result
+      assert instance.id == "facadetest::get1"
+      assert instance.context.initial == %{data: 42}
+    end
+
+    test "returns {:error, :not_found} for unknown value" do
+      # Arrange / Act
+      result = TestFacadeWorkflow.get("nonexistent")
+
+      # Assert
+      assert result == {:error, :not_found}
+    end
+  end
+
+  describe "list/1" do
+    test "returns all instances for the workflow" do
+      # Arrange
+      {:ok, _} = TestFacadeWorkflow.start("list1", %{})
+      {:ok, _} = TestFacadeWorkflow.start("list2", %{})
+
+      # Act
+      results = TestFacadeWorkflow.list()
+
+      # Assert
+      ids = Enum.map(results, & &1.id)
+      assert "facadetest::list1" in ids
+      assert "facadetest::list2" in ids
+    end
+
+    test "accepts additional filters" do
+      # Arrange
+      {:ok, _} = TestFacadeWorkflow.start("listf1", %{})
+
+      # Act
+      results = TestFacadeWorkflow.list(status: :pending)
+
+      # Assert
+      assert Enum.all?(results, & &1.status == :pending)
+    end
+  end
+
+  describe "cancel/1" do
+    test "cancels an active instance" do
+      # Arrange — start a workflow that will be in waiting state
+      {:ok, _} = TestFacadeEventWorkflow.start("cancel1", %{})
+      Process.sleep(50)
+
+      # Act
+      result = TestFacadeEventWorkflow.cancel("cancel1")
+
+      # Assert
+      assert result == :ok
+      {:ok, instance} = TestFacadeEventWorkflow.get("cancel1")
+      assert instance.status == :cancelled
+    end
+
+    test "returns {:error, :not_found} for unknown value" do
+      # Arrange / Act
+      result = TestFacadeWorkflow.cancel("nocancel")
+
+      # Assert
+      assert result == {:error, :not_found}
+    end
+  end
+
+  describe "scope :none" do
+    test "start/2 creates instance with suffixed ID" do
+      # Arrange — workflow with unique: [key: "noneid", scope: :none]
+
+      # Act
+      {:ok, id} = TestFacadeNoneWorkflow.start("abc123", %{})
+
+      # Assert
+      assert String.starts_with?(id, "noneid::abc123::")
+    end
+
+    test "resume/2 is not defined" do
+      # Arrange / Act / Assert
+      refute function_exported?(TestFacadeNoneWorkflow, :resume, 2)
+    end
+
+    test "get/1 is not defined" do
+      # Arrange / Act / Assert
+      refute function_exported?(TestFacadeNoneWorkflow, :get, 1)
+    end
+
+    test "cancel/1 is not defined" do
+      # Arrange / Act / Assert
+      refute function_exported?(TestFacadeNoneWorkflow, :cancel, 1)
+    end
+
+    test "list/1 is defined" do
+      # Arrange / Act / Assert
+      assert function_exported?(TestFacadeNoneWorkflow, :list, 0)
+      assert function_exported?(TestFacadeNoneWorkflow, :list, 1)
+    end
+  end
+end
+```
+
 ## Done when
 
-- [ ] Facade functions are generated for workflows with `unique:`
-- [ ] `start/2` builds ID, checks uniqueness, delegates to Hephaestus
-- [ ] `resume/2` builds ID and delegates
-- [ ] `get/1` builds ID and queries storage
-- [ ] `list/1` queries storage with workflow filter
-- [ ] `cancel/1` validates status and updates
+- [ ] All 14 tests pass
+- [ ] Facade functions generated correctly for all scopes
 - [ ] `scope: :none` only generates `start/2` and `list/1`
-- [ ] `scope: :workflow` rejects duplicates correctly
-- [ ] Hephaestus module is discovered via Instances registry
-- [ ] All tests pass
+- [ ] `mix test test/hephaestus/core/workflow_facade_test.exs` green

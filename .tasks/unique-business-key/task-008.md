@@ -67,11 +67,65 @@ The entry module test (`test/hephaestus/entry_module_test.exs`) tests that `star
 
 **Important:** The test support file `test/support/test_hephaestus.ex` defines `Hephaestus.Test.Hephaestus` — do NOT modify it in this task. That's task-011.
 
+## TDD Test Sequence
+
+**Test file:** `test/hephaestus/entry_module_test.exs` (update existing)
+
+```elixir
+# Add/replace in existing entry module test
+
+describe "start_instance/3 with custom ID" do
+  test "accepts and passes through explicit ID" do
+    # Arrange
+    workflow = Hephaestus.Test.LinearWorkflow  # needs unique: added in task-011
+
+    # Act
+    {:ok, id} = Hephaestus.Test.Hephaestus.start_instance(
+      workflow, %{}, id: "testlinear::entry1"
+    )
+
+    # Assert
+    assert id == "testlinear::entry1"
+  end
+
+  test "raises KeyError when :id is not provided" do
+    # Arrange
+    workflow = Hephaestus.Test.LinearWorkflow
+
+    # Act / Assert
+    assert_raise KeyError, ~r/key :id not found/, fn ->
+      Hephaestus.Test.Hephaestus.start_instance(workflow, %{})
+    end
+  end
+end
+
+describe "supervision tree includes Tracker" do
+  test "Hephaestus module is discoverable via Instances.lookup!" do
+    # Arrange — Hephaestus.Test.Hephaestus is already started in test setup
+
+    # Act
+    module = Hephaestus.Instances.lookup!()
+
+    # Assert
+    assert module == Hephaestus.Test.Hephaestus
+  end
+end
+
+describe "__storage__/0" do
+  test "returns the storage adapter tuple" do
+    # Arrange / Act
+    {mod, name} = Hephaestus.Test.Hephaestus.__storage__()
+
+    # Assert
+    assert mod == Hephaestus.Runtime.Storage.ETS
+    assert name == Hephaestus.Test.Hephaestus.Storage
+  end
+end
+```
+
 ## Done when
 
-- [ ] `MyApp.Hephaestus` supervision tree includes the Tracker
-- [ ] Tracker registers the module on boot
-- [ ] `start_instance(workflow, ctx, id: "test::abc")` works
-- [ ] `start_instance(workflow, ctx)` without `:id` raises `KeyError`
-- [ ] The ID is passed through to the runner
-- [ ] Entry module tests pass
+- [ ] All 4 tests pass
+- [ ] Tracker is in supervision tree
+- [ ] `__storage__/0` is generated and returns correct tuple
+- [ ] `mix test test/hephaestus/entry_module_test.exs` green

@@ -47,10 +47,104 @@ Every test that calls `Instance.new` must be updated to pass an explicit ID stri
 
 Search for all usages of `Instance.new` in the test files and update them.
 
+## TDD Test Sequence
+
+**Test file:** `test/hephaestus/core/instance_test.exs` (replace existing tests)
+
+```elixir
+defmodule Hephaestus.Core.InstanceTest do
+  use ExUnit.Case, async: true
+
+  alias Hephaestus.Core.{Context, Instance}
+
+  describe "new/4" do
+    test "creates instance with explicit ID" do
+      # Arrange
+      workflow = MyTestWorkflow
+      id = "orderid::abc123"
+
+      # Act
+      instance = Instance.new(workflow, 1, %{order_id: 123}, id)
+
+      # Assert
+      assert %Instance{
+               id: "orderid::abc123",
+               workflow: MyTestWorkflow,
+               workflow_version: 1,
+               status: :pending
+             } = instance
+
+      assert %Context{initial: %{order_id: 123}} = instance.context
+    end
+
+    test "preserves the exact ID provided" do
+      # Arrange
+      id = "blueprintid::550e8400-e29b-41d4-a716-446655440000"
+
+      # Act
+      instance = Instance.new(MyTestWorkflow, 1, %{}, id)
+
+      # Assert
+      assert instance.id == "blueprintid::550e8400-e29b-41d4-a716-446655440000"
+    end
+
+    test "initializes with empty active and completed steps" do
+      # Arrange / Act
+      instance = Instance.new(MyTestWorkflow, 1, %{}, "test::init")
+
+      # Assert
+      assert MapSet.size(instance.active_steps) == 0
+      assert MapSet.size(instance.completed_steps) == 0
+      assert instance.execution_history == []
+    end
+
+    test "sets workflow version" do
+      # Arrange / Act
+      instance = Instance.new(MyTestWorkflow, 3, %{}, "test::v3")
+
+      # Assert
+      assert instance.workflow_version == 3
+    end
+
+    test "initializes telemetry fields with defaults" do
+      # Arrange / Act
+      instance = Instance.new(MyTestWorkflow, 1, %{}, "test::telem")
+
+      # Assert
+      assert instance.telemetry_metadata == %{}
+      assert instance.telemetry_start_time == nil
+    end
+  end
+
+  describe "new/4 guards" do
+    test "rejects non-binary ID" do
+      # Arrange / Act / Assert
+      assert_raise FunctionClauseError, fn ->
+        Instance.new(MyTestWorkflow, 1, %{}, 123)
+      end
+    end
+
+    test "rejects non-atom workflow" do
+      # Arrange / Act / Assert
+      assert_raise FunctionClauseError, fn ->
+        Instance.new("NotAModule", 1, %{}, "test::guard")
+      end
+    end
+
+    test "rejects zero version" do
+      # Arrange / Act / Assert
+      assert_raise FunctionClauseError, fn ->
+        Instance.new(MyTestWorkflow, 0, %{}, "test::guard")
+      end
+    end
+  end
+end
+```
+
 ## Done when
 
-- [ ] `Instance.new(MyWorkflow, 1, %{}, "test::abc123")` creates instance with that ID
-- [ ] `Instance.new/1`, `new/2`, `new/3` no longer exist
-- [ ] `generate_uuid/0` and related helpers removed
-- [ ] All instance tests pass with explicit IDs
-- [ ] No compilation warnings
+- [ ] All 8 tests pass
+- [ ] `Instance.new/1`, `new/2`, `new/3` no longer exist (removed)
+- [ ] `generate_uuid/0` and UUID helpers removed
+- [ ] `test/hephaestus/core/instance_v2_test.exs` updated and passing
+- [ ] `mix test test/hephaestus/core/instance_test.exs` green

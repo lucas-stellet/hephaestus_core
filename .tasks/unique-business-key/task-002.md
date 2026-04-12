@@ -56,16 +56,180 @@ Extracts the business value from a composite ID:
 
 Raises `ArgumentError` for malformed IDs.
 
+## TDD Test Sequence
+
+**Test file:** `test/hephaestus/uniqueness_test.exs`
+
+```elixir
+defmodule Hephaestus.UniquenessTest do
+  use ExUnit.Case, async: true
+
+  alias Hephaestus.Uniqueness
+  alias Hephaestus.Workflow.Unique
+
+  describe "build_id/2" do
+    test "constructs composite ID with key and value" do
+      # Arrange
+      unique = %Unique{key: "blueprintid", scope: :workflow}
+
+      # Act
+      id = Uniqueness.build_id(unique, "abc123")
+
+      # Assert
+      assert id == "blueprintid::abc123"
+    end
+
+    test "constructs composite ID with UUID value" do
+      # Arrange
+      unique = %Unique{key: "blueprintid", scope: :workflow}
+      uuid = "550e8400-e29b-41d4-a716-446655440000"
+
+      # Act
+      id = Uniqueness.build_id(unique, uuid)
+
+      # Assert
+      assert id == "blueprintid::550e8400-e29b-41d4-a716-446655440000"
+    end
+
+    test "raises on invalid value" do
+      # Arrange
+      unique = %Unique{key: "bp", scope: :workflow}
+
+      # Act / Assert
+      assert_raise ArgumentError, ~r/invalid id value/, fn ->
+        Uniqueness.build_id(unique, "ABC-invalid")
+      end
+    end
+  end
+
+  describe "build_id_with_suffix/2" do
+    test "constructs composite ID with random suffix" do
+      # Arrange
+      unique = %Unique{key: "userid", scope: :none}
+
+      # Act
+      id = Uniqueness.build_id_with_suffix(unique, "abc123")
+
+      # Assert
+      assert String.starts_with?(id, "userid::abc123::")
+      [_key, _value, suffix] = String.split(id, "::")
+      assert byte_size(suffix) == 8
+      assert Regex.match?(~r/^[a-f0-9]{8}$/, suffix)
+    end
+
+    test "generates unique suffixes on each call" do
+      # Arrange
+      unique = %Unique{key: "userid", scope: :none}
+
+      # Act
+      id1 = Uniqueness.build_id_with_suffix(unique, "abc123")
+      id2 = Uniqueness.build_id_with_suffix(unique, "abc123")
+
+      # Assert
+      refute id1 == id2
+    end
+  end
+
+  describe "validate_value!/1" do
+    test "accepts lowercase alphanumeric" do
+      # Arrange / Act / Assert
+      assert Uniqueness.validate_value!("abc123") == :ok
+    end
+
+    test "accepts valid UUID with hyphens" do
+      # Arrange / Act / Assert
+      assert Uniqueness.validate_value!("550e8400-e29b-41d4-a716-446655440000") == :ok
+    end
+
+    test "rejects uppercase letters" do
+      # Arrange / Act / Assert
+      assert_raise ArgumentError, ~r/invalid id value: "ABC"/, fn ->
+        Uniqueness.validate_value!("ABC")
+      end
+    end
+
+    test "rejects hyphens outside UUID format" do
+      # Arrange / Act / Assert
+      assert_raise ArgumentError, ~r/invalid id value: "abc-123"/, fn ->
+        Uniqueness.validate_value!("abc-123")
+      end
+    end
+
+    test "rejects underscores" do
+      # Arrange / Act / Assert
+      assert_raise ArgumentError, ~r/invalid id value/, fn ->
+        Uniqueness.validate_value!("abc_123")
+      end
+    end
+
+    test "rejects double colon separator" do
+      # Arrange / Act / Assert
+      assert_raise ArgumentError, ~r/invalid id value/, fn ->
+        Uniqueness.validate_value!("abc::123")
+      end
+    end
+
+    test "rejects spaces" do
+      # Arrange / Act / Assert
+      assert_raise ArgumentError, ~r/invalid id value/, fn ->
+        Uniqueness.validate_value!("abc 123")
+      end
+    end
+
+    test "rejects empty string" do
+      # Arrange / Act / Assert
+      assert_raise ArgumentError, ~r/invalid id value/, fn ->
+        Uniqueness.validate_value!("")
+      end
+    end
+  end
+
+  describe "extract_value/1" do
+    test "extracts value from simple composite ID" do
+      # Arrange
+      id = "blueprintid::abc123"
+
+      # Act
+      value = Uniqueness.extract_value(id)
+
+      # Assert
+      assert value == "abc123"
+    end
+
+    test "extracts value from suffixed composite ID" do
+      # Arrange
+      id = "userid::abc123::a1b2c3d4"
+
+      # Act
+      value = Uniqueness.extract_value(id)
+
+      # Assert
+      assert value == "abc123"
+    end
+
+    test "extracts UUID value from composite ID" do
+      # Arrange
+      id = "blueprintid::550e8400-e29b-41d4-a716-446655440000"
+
+      # Act
+      value = Uniqueness.extract_value(id)
+
+      # Assert
+      assert value == "550e8400-e29b-41d4-a716-446655440000"
+    end
+
+    test "raises on malformed ID without separator" do
+      # Arrange / Act / Assert
+      assert_raise ArgumentError, ~r/invalid unique id format/, fn ->
+        Uniqueness.extract_value("noseparator")
+      end
+    end
+  end
+end
+```
+
 ## Done when
 
-- [ ] `build_id(%Unique{key: "bp"}, "abc123")` returns `"bp::abc123"`
-- [ ] `build_id_with_suffix` returns `"key::value::8hexchars"` format
-- [ ] `validate_value!("abc123")` passes
-- [ ] `validate_value!("550e8400-e29b-41d4-a716-446655440000")` passes
-- [ ] `validate_value!("ABC")` raises
-- [ ] `validate_value!("abc-123")` raises (hyphen outside UUID)
-- [ ] `validate_value!("abc_123")` raises
-- [ ] `validate_value!("abc::123")` raises
-- [ ] `extract_value("bp::abc123")` returns `"abc123"`
-- [ ] `extract_value("bp::abc123::suffix")` returns `"abc123"`
-- [ ] All tests pass
+- [ ] All 16 tests pass
+- [ ] No compilation warnings
+- [ ] `mix test test/hephaestus/uniqueness_test.exs` green

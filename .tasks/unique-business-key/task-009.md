@@ -47,10 +47,74 @@ Search for patterns like:
 
 Add `id: "test::instanceN"` (use unique IDs per test to avoid conflicts in async tests).
 
+## TDD Test Sequence
+
+**Test file:** `test/hephaestus/runtime/runner/local_test.exs` (update existing)
+
+```elixir
+# Add/update in existing local runner test
+
+describe "start_instance/3 with custom ID" do
+  test "creates instance with the provided ID" do
+    # Arrange
+    opts = runner_opts() ++ [id: "testlinear::runner1", workflow_version: 1]
+
+    # Act
+    {:ok, id} = Runner.Local.start_instance(
+      Hephaestus.Test.LinearWorkflow, %{}, opts
+    )
+
+    # Assert
+    assert id == "testlinear::runner1"
+  end
+
+  test "stores instance with the provided ID in storage" do
+    # Arrange
+    opts = runner_opts() ++ [id: "testlinear::runner2", workflow_version: 1]
+
+    # Act
+    {:ok, id} = Runner.Local.start_instance(
+      Hephaestus.Test.LinearWorkflow, %{}, opts
+    )
+
+    # Assert
+    {storage_mod, storage_name} = opts[:storage]
+    {:ok, instance} = storage_mod.get(storage_name, id)
+    assert instance.id == "testlinear::runner2"
+  end
+
+  test "raises when :id is not provided" do
+    # Arrange
+    opts = runner_opts() ++ [workflow_version: 1]
+
+    # Act / Assert
+    assert_raise KeyError, ~r/key :id not found/, fn ->
+      Runner.Local.start_instance(Hephaestus.Test.LinearWorkflow, %{}, opts)
+    end
+  end
+end
+
+describe "resume/2 with custom ID" do
+  test "resumes instance by custom ID" do
+    # Arrange
+    opts = runner_opts() ++ [id: "testevent::resume1", workflow_version: 1]
+    {:ok, id} = Runner.Local.start_instance(
+      Hephaestus.Test.EventWorkflow, %{}, opts
+    )
+    Process.sleep(50)  # let it advance to waiting
+
+    # Act
+    result = Runner.Local.resume(id, :payment_confirmed)
+
+    # Assert
+    assert result == :ok
+  end
+end
+```
+
 ## Done when
 
-- [ ] `Runner.Local.start_instance(MyWorkflow, ctx, id: "test::abc", ...)` creates instance with that ID
-- [ ] The instance ID in storage matches the provided ID
-- [ ] `resume/2` works with the custom ID
-- [ ] All local runner tests pass
-- [ ] All local runner v2 tests pass
+- [ ] All 4 tests pass
+- [ ] Existing runner tests updated with `id:` and passing
+- [ ] `mix test test/hephaestus/runtime/runner/local_test.exs` green
+- [ ] `mix test test/hephaestus/runtime/runner/local_v2_test.exs` green
