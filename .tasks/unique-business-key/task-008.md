@@ -10,11 +10,21 @@ Update the entry-point macro (`use Hephaestus`) to add the Instances Tracker to 
 
 ## Files
 
+**Modify:** `test/hephaestus/entry_module_test.exs` — write new tests first
 **Modify:** `lib/hephaestus.ex` — update `child_spec`, update `start_instance`
 **Modify:** `lib/hephaestus/application.ex` — already updated by task-003 (just verify)
-**Modify:** `test/hephaestus/entry_module_test.exs` — update tests
 
 **Read:** `lib/hephaestus/instances/tracker.ex` — Tracker module (from task-003)
+
+## TDD Execution Order
+
+### Phase 1: RED — Write entry module tests first
+
+Add/update tests in the entry module test file targeting: custom ID in start_instance, KeyError when missing, Tracker in supervision tree, `__storage__/0` accessor. Tests fail because the macro doesn't support these yet.
+
+### Phase 2: GREEN — Update the macro
+
+### Phase 3: REFACTOR — Clean up if needed
 
 ## Requirements
 

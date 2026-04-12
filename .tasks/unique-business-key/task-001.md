@@ -10,10 +10,16 @@ Create the `Hephaestus.Workflow.Unique` struct that holds business key configura
 
 ## Files
 
-**Create:** `lib/hephaestus/core/workflow/unique.ex` — the Unique struct module
 **Create:** `test/hephaestus/core/workflow/unique_test.exs` — validation tests
+**Create:** `lib/hephaestus/core/workflow/unique.ex` — the Unique struct module
 
-## Requirements
+## TDD Execution Order
+
+### Phase 1: RED — Write all tests first
+
+Create the test file with all skeletons. Create a minimal module stub (`defmodule Hephaestus.Workflow.Unique do end`) so the test file compiles but all tests fail.
+
+### Phase 2: GREEN — Implement to make tests pass
 
 The struct has two fields:
 - `key` (required, string) — business key prefix. Format: `[a-z0-9]+` only. No hyphens, underscores, uppercase.
@@ -25,11 +31,11 @@ Implement `new!/1` that accepts a keyword list, creates the struct via `struct!/
 - `scope` is one of the valid values
 - Missing `key` triggers the standard `struct!` error
 
-All validations raise `ArgumentError` with descriptive messages. This constructor will be called at compile-time by the Workflow macro.
+All validations raise `ArgumentError` with descriptive messages. Include `@type t`, `@type scope`, `@enforce_keys [:key]`.
 
-Include `@type t`, `@type scope`, `@enforce_keys [:key]`.
+### Phase 3: REFACTOR — Clean up if needed
 
-## TDD Test Sequence
+## Tests
 
 **Test file:** `test/hephaestus/core/workflow/unique_test.exs`
 

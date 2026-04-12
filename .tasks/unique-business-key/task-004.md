@@ -10,44 +10,34 @@ Remove auto-generated UUID from `Instance.new` and require an explicit ID string
 
 ## Files
 
+**Modify:** `test/hephaestus/core/instance_test.exs` — rewrite tests for new/4
+**Modify:** `test/hephaestus/core/instance_v2_test.exs` — update to pass explicit ID
 **Modify:** `lib/hephaestus/core/instance.ex` — replace constructors
-**Modify:** `test/hephaestus/core/instance_test.exs` — update tests to pass explicit ID
-**Modify:** `test/hephaestus/core/instance_v2_test.exs` — update tests to pass explicit ID
 
 **Read:** `lib/hephaestus/core/instance.ex` — understand current constructors
 
-## Requirements
+## TDD Execution Order
 
-### Remove
-- `new/1` (workflow only)
-- `new/2` (workflow + context, workflow + version)
-- `new/3` (workflow + version + context)
-- `generate_uuid/0` private function
-- `band/2`, `bor/2`, `encode/2` private helpers (only used by UUID generation)
+### Phase 1: RED — Rewrite tests first
 
-### Add
-- `new/4` — `new(workflow, version, context, id)` where `id` is a binary string
+Replace the test file with tests targeting `new/4`. Tests will fail because `new/4` doesn't exist yet and `new/1,2,3` still do.
+
+### Phase 2: GREEN — Implement to make tests pass
+
+Remove `new/1`, `new/2`, `new/3`, `generate_uuid/0`, `band/2`, `bor/2`, `encode/2`. Add `new/4`:
 
 ```elixir
-@spec new(module(), pos_integer(), map(), String.t()) :: t()
 def new(workflow, version, context, id)
     when is_atom(workflow) and is_integer(version) and version > 0 and is_map(context) and is_binary(id) do
-  %__MODULE__{
-    id: id,
-    workflow: workflow,
-    workflow_version: version,
-    context: Context.new(context)
-  }
+  %__MODULE__{id: id, workflow: workflow, workflow_version: version, context: Context.new(context)}
 end
 ```
 
-### Update tests
+Update `instance_v2_test.exs` to pass explicit IDs.
 
-Every test that calls `Instance.new` must be updated to pass an explicit ID string. Use simple IDs like `"test::instance1"`, `"test::instance2"` etc. for test fixtures.
+### Phase 3: REFACTOR — Clean up removed code
 
-Search for all usages of `Instance.new` in the test files and update them.
-
-## TDD Test Sequence
+## Tests
 
 **Test file:** `test/hephaestus/core/instance_test.exs` (replace existing tests)
 

@@ -10,34 +10,28 @@ Add support for `:id`, `:workflow_version`, and `:status_in` filters to the ETS 
 
 ## Files
 
+**Modify:** `test/hephaestus/runtime/storage/ets_test.exs` — add tests for new filters first
 **Modify:** `lib/hephaestus/runtime/storage/ets.ex` — extend `matches_filters?/2`
-**Modify:** `test/hephaestus/runtime/storage/ets_test.exs` — add tests for new filters
 
 **Read:** `lib/hephaestus/runtime/storage.ex` — understand the behaviour contract
 
-## Requirements
+## TDD Execution Order
 
-The current `matches_filters?/2` in `storage/ets.ex` (line 139-144) handles `:status` and `:workflow`. Add:
+### Phase 1: RED — Add new test describe blocks first
+
+Add test blocks for `:id`, `:status_in`, `:workflow_version`, and combined filters to the existing ETS test file. Use `%Instance{}` struct literals for fixtures (avoids dependency on Instance.new changes from task-004 running in parallel). Tests will fail because ETS doesn't support these filters yet.
+
+### Phase 2: GREEN — Extend matches_filters?/2
+
+Add new filter clauses to `matches_filters?/2` in `storage/ets.ex`:
 
 ```elixir
-defp matches_filters?(%Instance{} = instance, filters) do
-  Enum.all?(filters, fn
-    {:status, status} -> instance.status == status
-    {:status_in, statuses} -> instance.status in statuses
-    {:workflow, workflow} -> instance.workflow == workflow
-    {:workflow_version, v} -> instance.workflow_version == v
-    {:id, id} -> instance.id == id
-    {_key, _value} -> true
-  end)
-end
+{:status_in, statuses} -> instance.status in statuses
+{:workflow_version, v} -> instance.workflow_version == v
+{:id, id} -> instance.id == id
 ```
 
-### Test scenarios
-
-Test with instances that have explicit IDs (use `"test::abc"` format since Instance.new now requires ID — but this task runs in parallel with task-004, so create instances directly with `%Instance{id: "...", ...}` struct syntax for test fixtures).
-
-1. Filter by `:id` — exact match
-2. Filter by `:status_in` — list of statuses
+### Phase 3: REFACTOR — Clean up if needed
 3. Filter by `:workflow_version` — exact version match
 4. Combined filters: `:id` + `:workflow` + `:status_in`
 5. Empty filters still return all instances

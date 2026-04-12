@@ -10,42 +10,29 @@ Create the auto-discovery mechanism that allows workflow facades to find the Hep
 
 ## Files
 
+**Create:** `test/hephaestus/instances_test.exs` — tests for register, lookup, multi-instance error
 **Create:** `lib/hephaestus/instances.ex` — registry module with `register/1` and `lookup!/0`
 **Create:** `lib/hephaestus/instances/tracker.ex` — GenServer that registers on init, auto-deregisters on death
-**Create:** `test/hephaestus/instances_test.exs` — tests for register, lookup, multi-instance error
 
-## Requirements
+## TDD Execution Order
 
-### `Hephaestus.Instances`
+### Phase 1: RED — Write all tests first
 
-- `child_spec/1` — creates a `Registry` child spec with `keys: :unique` and name `Hephaestus.Instances.Registry`
-- `register/1` — registers the given module name in the registry. Called by the Tracker.
-- `lookup!/0` — returns the single registered Hephaestus module. Raises if none or multiple found.
+Create the test file. Create minimal module stubs for `Hephaestus.Instances` and `Hephaestus.Instances.Tracker` so tests compile. The Instances registry needs to be started before tests run — add `Hephaestus.Instances` to `Hephaestus.Application` children first (it already exists with empty children list).
 
-```elixir
-def lookup! do
-  case Registry.select(@registry, [{{:"$1", :_, :_}, [], [:"$1"]}]) do
-    [single] -> single
-    [] -> raise "No Hephaestus instance running. Start one in your supervision tree."
-    multiple -> raise "Multiple Hephaestus instances: #{inspect(multiple)}. " <>
-                      "Pass hephaestus: MyApp.Hephaestus in your workflow's use options."
-  end
-end
-```
+### Phase 2: GREEN — Implement to make tests pass
 
-### `Hephaestus.Instances.Tracker`
+- `Hephaestus.Instances.child_spec/1` — `Registry` child spec with `keys: :unique`, name `Hephaestus.Instances.Registry`
+- `Hephaestus.Instances.register/1` — registers module in the registry
+- `Hephaestus.Instances.lookup!/0` — returns single registered module, raises if none or multiple
+- `Hephaestus.Instances.Tracker` — GenServer, `init/1` calls `register/1`, auto-deregisters on death via Registry cleanup
+- Add `Hephaestus.Instances` to `Hephaestus.Application` children
 
-- A simple GenServer. `init/1` receives the hephaestus module name and calls `Instances.register/1`.
-- When the process dies (supervisor shutdown, crash), Registry automatically deregisters — no `terminate/1` needed.
-- `start_link/1` accepts the module atom.
+**Note:** Do NOT modify `lib/hephaestus.ex`. The Tracker is added to the supervision tree in task-008.
 
-### Application integration
+### Phase 3: REFACTOR — Clean up if needed
 
-The `Hephaestus.Instances` registry must start in the `Hephaestus.Application`. Read `lib/hephaestus/application.ex` — it already exists but has an empty children list. Add `Hephaestus.Instances` to it.
-
-**Note:** Do NOT modify `lib/hephaestus.ex` in this task. The Tracker is added to the supervision tree in task-008.
-
-## TDD Test Sequence
+## Tests
 
 **Test file:** `test/hephaestus/instances_test.exs`
 

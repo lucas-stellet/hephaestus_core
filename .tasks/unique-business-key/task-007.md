@@ -10,10 +10,22 @@ Extend the `use Hephaestus.Workflow` macro to accept the mandatory `:unique` opt
 
 ## Files
 
-**Modify:** `lib/hephaestus/core/workflow.ex` — add unique option handling
 **Create:** `test/hephaestus/core/workflow_unique_test.exs` — tests for unique DSL
+**Modify:** `lib/hephaestus/core/workflow.ex` — add unique option handling
 
 **Read:** `lib/hephaestus/core/workflow/unique.ex` — the Unique struct (from task-001)
+
+## TDD Execution Order
+
+### Phase 1: RED — Write compile-time tests first
+
+Create the test file using `Code.compile_quoted` to test inline workflow definitions (same pattern as `workflow_tags_test.exs`). Tests will fail because the macro doesn't handle `unique:` yet.
+
+### Phase 2: GREEN — Add unique handling to macro
+
+### Phase 3: REFACTOR — Clean up if needed
+
+**Important:** Do NOT update existing test workflow fixtures. They will break because they lack `unique:`. Task-011 handles that.
 
 ## Requirements
 

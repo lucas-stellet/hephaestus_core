@@ -10,12 +10,24 @@ The most complex task. Extend the Workflow macro to generate facade functions (`
 
 ## Files
 
+**Create:** `test/hephaestus/core/workflow_facade_test.exs` — comprehensive facade tests first
 **Modify:** `lib/hephaestus/core/workflow.ex` — add facade generation in both umbrella and standard compile paths
-**Create:** `test/hephaestus/core/workflow_facade_test.exs` — comprehensive facade tests
 
 **Read:** `lib/hephaestus/uniqueness.ex` — Uniqueness module
 **Read:** `lib/hephaestus/instances.ex` — Instances registry
 **Read:** `lib/hephaestus/core/workflow/unique.ex` — Unique struct
+
+## TDD Execution Order
+
+### Phase 1: RED — Write full facade test suite first
+
+Create test file with inline test workflows (WITH `unique:`) and tests for all facade functions. Define test support workflows for the facade tests. Tests fail because facade functions aren't generated yet.
+
+### Phase 2: GREEN — Generate facade functions in macro
+
+Implement facade generation in both `__before_compile_umbrella__` and `__before_compile_standard__`. Work through tests one describe block at a time: start → resume → get → list → cancel → scope:none.
+
+### Phase 3: REFACTOR — Extract shared logic between umbrella/standard paths
 
 ## Requirements
 

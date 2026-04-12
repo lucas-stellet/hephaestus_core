@@ -3,6 +3,8 @@
 > Generated from: `docs/superpowers/specs/2026-04-10-unique-business-key-facade-design.md`
 > Total tasks: 11 (core) + 4 (extensions) | Waves: 5 (core) + 2 (extensions) | Max parallelism: 3
 
+**TDD Discipline:** Every task follows RED-GREEN-REFACTOR. The agent writes tests FIRST (RED), implements to make them pass (GREEN), then refactors. Test files are listed before implementation files in each task.
+
 **Note:** Tasks for hephaestus_ecto and hephaestus_oban are separated and execute after core is complete.
 
 ## hephaestus_core Waves

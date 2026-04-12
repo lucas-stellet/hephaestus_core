@@ -10,11 +10,21 @@ Update the local runner to use the explicit ID from opts instead of the auto-gen
 
 ## Files
 
+**Modify:** `test/hephaestus/runtime/runner/local_test.exs` — write new tests first
+**Modify:** `test/hephaestus/runtime/runner/local_v2_test.exs` — update existing tests
 **Modify:** `lib/hephaestus/runtime/runner/local.ex` — update `start_instance`
-**Modify:** `test/hephaestus/runtime/runner/local_test.exs` — update tests
-**Modify:** `test/hephaestus/runtime/runner/local_v2_test.exs` — update tests
 
 **Read:** `lib/hephaestus/core/instance.ex` — understand new `Instance.new/4` (from task-004)
+
+## TDD Execution Order
+
+### Phase 1: RED — Write/update runner tests first
+
+Add new tests for custom ID behavior and update existing tests to pass `id:`. Tests fail because the runner still uses `Instance.new/3`.
+
+### Phase 2: GREEN — Update runner start_instance
+
+### Phase 3: REFACTOR — Clean up if needed
 
 ## Requirements
 

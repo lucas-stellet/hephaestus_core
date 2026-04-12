@@ -10,8 +10,18 @@ Add the `check/5` function to `Hephaestus.Uniqueness` that verifies uniqueness b
 
 ## Files
 
+**Modify:** `test/hephaestus/uniqueness_test.exs` — add check/5 tests for each scope first
 **Modify:** `lib/hephaestus/uniqueness.ex` — add `check/5` with pattern matching on scope
-**Modify:** `test/hephaestus/uniqueness_test.exs` — add tests for each scope
+
+## TDD Execution Order
+
+### Phase 1: RED — Add check/5 tests to existing test file
+
+Add new describe blocks to the uniqueness test file from task-002. Tests fail because `check/5` doesn't exist yet.
+
+### Phase 2: GREEN — Implement check/5
+
+### Phase 3: REFACTOR — Clean up if needed
 
 ## Requirements
 

@@ -10,53 +10,25 @@ Create the `Hephaestus.Uniqueness` module that handles composite ID construction
 
 ## Files
 
-**Create:** `lib/hephaestus/uniqueness.ex` — the Uniqueness module
 **Create:** `test/hephaestus/uniqueness_test.exs` — tests for build/validate/extract
+**Create:** `lib/hephaestus/uniqueness.ex` — the Uniqueness module
 
-## Requirements
+## TDD Execution Order
 
-### `build_id/2`
+### Phase 1: RED — Write all tests first
 
-Takes a `%Unique{}` struct and a value string. Returns `"key::value"`.
+Create the test file. Create a minimal module stub so tests compile but fail.
 
-```elixir
-def build_id(%Unique{key: key}, value) do
-  validate_value!(value)
-  "#{key}::#{value}"
-end
-```
+### Phase 2: GREEN — Implement to make tests pass
 
-### `build_id_with_suffix/2`
+- `build_id/2` — takes `%Unique{}` + value string, returns `"key::value"`. Calls `validate_value!` first.
+- `build_id_with_suffix/2` — same but appends random 8-char hex suffix via `:crypto.strong_rand_bytes(4)`.
+- `validate_value!/1` — value must be `[a-z0-9]+` or UUID (`[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}`). `-` ONLY inside valid UUIDs. Raises `ArgumentError`.
+- `extract_value/1` — splits on `::`, returns second segment. Handles 2-part (`key::value`) and 3-part (`key::value::suffix`) IDs.
 
-For `scope: :none` — appends a random 8-char hex suffix to avoid storage collision.
+### Phase 3: REFACTOR — Clean up if needed
 
-```elixir
-def build_id_with_suffix(%Unique{key: key}, value) do
-  validate_value!(value)
-  suffix = :crypto.strong_rand_bytes(4) |> Base.encode16(case: :lower)
-  "#{key}::#{value}::#{suffix}"
-end
-```
-
-### `validate_value!/1`
-
-Value must be either:
-- Simple: `[a-z0-9]+` (lowercase alphanumeric only)
-- UUID: `[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}`
-
-The `-` character is ONLY permitted inside valid UUIDs. `"abc-123"` is invalid. `"550e8400-e29b-41d4-a716-446655440000"` is valid.
-
-Raises `ArgumentError` with: `"invalid id value: #{inspect(value)}. Must be [a-z0-9]+ or a valid UUID"`
-
-### `extract_value/1`
-
-Extracts the business value from a composite ID:
-- `"blueprintid::abc123"` -> `"abc123"`
-- `"userid::abc123::r7x9k2"` -> `"abc123"` (strips suffix for scope :none IDs)
-
-Raises `ArgumentError` for malformed IDs.
-
-## TDD Test Sequence
+## Tests
 
 **Test file:** `test/hephaestus/uniqueness_test.exs`
 
