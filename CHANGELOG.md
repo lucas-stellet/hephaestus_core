@@ -9,15 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Support `:id`, `:workflow_version`, and `:status_in` filters in the ETS storage adapter's `query/1` implementation.
-- `Hephaestus.Uniqueness.check/5` for scope-aware active-instance uniqueness checks via injected storage queries.
-- Required `:unique` workflow DSL option with generated `__unique__/0` and `__hephaestus__/0` introspection helpers.
-- Workflow facade generation for `start/2`, `resume/2`, `get/1`, `list/0-1`, and `cancel/1`, including `scope: :none` support and umbrella workflow storage resolution.
+- Mandatory business key (`unique:` option) for all workflows via `Hephaestus.Workflow.Unique` struct.
+- `Hephaestus.Uniqueness` module for composite ID construction (`key::value`), validation, and scope-based uniqueness checks.
+- `Hephaestus.Instances` auto-discovery registry with `Tracker` GenServer for runtime module lookup.
+- Workflow facade functions: `start/2`, `resume/2`, `get/1`, `list/0-1`, `cancel/1` generated in workflow modules.
+- Uniqueness scopes: `:workflow`, `:version`, `:global`, `:none` with configurable perimeter.
+- New ETS storage query filters: `:id`, `:workflow_version`, `:status_in`.
+- `__unique__/0`, `__hephaestus__/0`, `__storage__/0` introspection functions.
 
 ### Changed
 
-- Breaking: `Hephaestus.Core.Instance.new/4` now requires an explicit instance ID instead of generating one internally.
-- Breaking: `use Hephaestus` entry modules now require `id:` in `start_instance/3`, register an `Instances.Tracker` child in their supervision tree, and expose `__storage__/0` for storage adapter lookup.
+- Breaking: `Instance.new` now requires explicit ID parameter (no more auto-generated UUID).
+- Breaking: `start_instance/3` requires `:id` option.
+- Breaking: `use Hephaestus.Workflow` requires `:unique` option.
+- Composite ID format: `"key::value"` with `::` separator.
+
+### Removed
+
+- Auto-generated UUID for instance IDs (`Instance.new/1,2,3` and `generate_uuid/0`).
 
 ## [0.2.1] - 2026-04-09
 
