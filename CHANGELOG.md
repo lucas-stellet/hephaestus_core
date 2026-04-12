@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Support `:id`, `:workflow_version`, and `:status_in` filters in the ETS storage adapter's `query/1` implementation.
+- `Hephaestus.Uniqueness.check/5` for scope-aware active-instance uniqueness checks via injected storage queries.
 
 ### Changed
 

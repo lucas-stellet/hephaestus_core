@@ -130,4 +130,159 @@ defmodule Hephaestus.UniquenessTest do
       end
     end
   end
+
+  describe "check/5 with scope :none" do
+    test "always returns :ok regardless of existing instances" do
+      # Arrange
+      unique = %Unique{key: "userid", scope: :none}
+      query_fn = fn _filters -> [%{id: "userid::abc123"}] end
+
+      # Act
+      result = Uniqueness.check(unique, "userid::abc123", SomeWorkflow, 1, query_fn)
+
+      # Assert
+      assert result == :ok
+    end
+  end
+
+  describe "check/5 with scope :workflow" do
+    test "returns :ok when no active instances exist" do
+      # Arrange
+      unique = %Unique{key: "bp", scope: :workflow}
+      query_fn = fn _filters -> [] end
+
+      # Act
+      result = Uniqueness.check(unique, "bp::abc123", MyWorkflow, 1, query_fn)
+
+      # Assert
+      assert result == :ok
+    end
+
+    test "returns {:error, :already_running} when active instance exists" do
+      # Arrange
+      unique = %Unique{key: "bp", scope: :workflow}
+      query_fn = fn _filters -> [%{id: "bp::abc123"}] end
+
+      # Act
+      result = Uniqueness.check(unique, "bp::abc123", MyWorkflow, 1, query_fn)
+
+      # Assert
+      assert result == {:error, :already_running}
+    end
+
+    test "passes correct filters: id, workflow, status_in" do
+      # Arrange
+      unique = %Unique{key: "bp", scope: :workflow}
+      test_pid = self()
+
+      query_fn = fn filters ->
+        send(test_pid, {:filters, filters})
+        []
+      end
+
+      # Act
+      Uniqueness.check(unique, "bp::abc123", MyWorkflow, 2, query_fn)
+
+      # Assert
+      assert_received {:filters, filters}
+      assert Keyword.get(filters, :id) == "bp::abc123"
+      assert Keyword.get(filters, :workflow) == MyWorkflow
+      assert Keyword.get(filters, :status_in) == [:pending, :running, :waiting]
+      refute Keyword.has_key?(filters, :workflow_version)
+    end
+  end
+
+  describe "check/5 with scope :version" do
+    test "returns :ok when no active instances for that version" do
+      # Arrange
+      unique = %Unique{key: "bp", scope: :version}
+      query_fn = fn _filters -> [] end
+
+      # Act
+      result = Uniqueness.check(unique, "bp::abc123", MyWorkflow, 2, query_fn)
+
+      # Assert
+      assert result == :ok
+    end
+
+    test "returns {:error, :already_running} when active instance exists for that version" do
+      # Arrange
+      unique = %Unique{key: "bp", scope: :version}
+      query_fn = fn _filters -> [%{id: "bp::abc123"}] end
+
+      # Act
+      result = Uniqueness.check(unique, "bp::abc123", MyWorkflow, 2, query_fn)
+
+      # Assert
+      assert result == {:error, :already_running}
+    end
+
+    test "passes workflow_version in filters" do
+      # Arrange
+      unique = %Unique{key: "bp", scope: :version}
+      test_pid = self()
+
+      query_fn = fn filters ->
+        send(test_pid, {:filters, filters})
+        []
+      end
+
+      # Act
+      Uniqueness.check(unique, "bp::abc123", MyWorkflow, 2, query_fn)
+
+      # Assert
+      assert_received {:filters, filters}
+      assert Keyword.get(filters, :id) == "bp::abc123"
+      assert Keyword.get(filters, :workflow) == MyWorkflow
+      assert Keyword.get(filters, :workflow_version) == 2
+      assert Keyword.get(filters, :status_in) == [:pending, :running, :waiting]
+    end
+  end
+
+  describe "check/5 with scope :global" do
+    test "returns :ok when no active instances globally" do
+      # Arrange
+      unique = %Unique{key: "companyid", scope: :global}
+      query_fn = fn _filters -> [] end
+
+      # Act
+      result = Uniqueness.check(unique, "companyid::abc123", AnyWorkflow, 1, query_fn)
+
+      # Assert
+      assert result == :ok
+    end
+
+    test "returns {:error, :already_running} when active instance exists globally" do
+      # Arrange
+      unique = %Unique{key: "companyid", scope: :global}
+      query_fn = fn _filters -> [%{id: "companyid::abc123"}] end
+
+      # Act
+      result = Uniqueness.check(unique, "companyid::abc123", AnyWorkflow, 1, query_fn)
+
+      # Assert
+      assert result == {:error, :already_running}
+    end
+
+    test "only passes id and status_in in filters (no workflow)" do
+      # Arrange
+      unique = %Unique{key: "companyid", scope: :global}
+      test_pid = self()
+
+      query_fn = fn filters ->
+        send(test_pid, {:filters, filters})
+        []
+      end
+
+      # Act
+      Uniqueness.check(unique, "companyid::abc123", SomeWorkflow, 1, query_fn)
+
+      # Assert
+      assert_received {:filters, filters}
+      assert Keyword.get(filters, :id) == "companyid::abc123"
+      assert Keyword.get(filters, :status_in) == [:pending, :running, :waiting]
+      refute Keyword.has_key?(filters, :workflow)
+      refute Keyword.has_key?(filters, :workflow_version)
+    end
+  end
 end
