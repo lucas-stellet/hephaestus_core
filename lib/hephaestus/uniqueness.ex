@@ -1,5 +1,8 @@
 defmodule Hephaestus.Uniqueness do
+  alias Hephaestus.Core.Instance
   alias Hephaestus.Workflow.Unique
+
+  @active_statuses [:pending, :running, :waiting]
 
   def build_id(%Unique{key: key}, value) do
     validate_value!(value)
@@ -26,6 +29,31 @@ defmodule Hephaestus.Uniqueness do
       [_key, value] -> value
       [_key, value, _suffix] -> value
       _ -> raise ArgumentError, "invalid unique id format: #{id}"
+    end
+  end
+
+  @spec check(Unique.t(), String.t(), module(), pos_integer(), (keyword() -> [Instance.t()])) ::
+          :ok | {:error, :already_running}
+  def check(%Unique{scope: :none}, _id, _workflow, _version, _query_fn), do: :ok
+
+  def check(%Unique{scope: :workflow}, id, workflow, _version, query_fn) do
+    case query_fn.(id: id, workflow: workflow, status_in: @active_statuses) do
+      [] -> :ok
+      [_ | _] -> {:error, :already_running}
+    end
+  end
+
+  def check(%Unique{scope: :version}, id, workflow, version, query_fn) do
+    case query_fn.(id: id, workflow: workflow, workflow_version: version, status_in: @active_statuses) do
+      [] -> :ok
+      [_ | _] -> {:error, :already_running}
+    end
+  end
+
+  def check(%Unique{scope: :global}, id, _workflow, _version, query_fn) do
+    case query_fn.(id: id, status_in: @active_statuses) do
+      [] -> :ok
+      [_ | _] -> {:error, :already_running}
     end
   end
 
