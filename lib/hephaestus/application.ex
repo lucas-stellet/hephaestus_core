@@ -1,7 +1,10 @@
 defmodule Hephaestus.Application do
-  # See https://hexdocs.pm/elixir/Application.html
-  # for more information on OTP Applications
-  @moduledoc false
+  @moduledoc """
+  OTP Application for Hephaestus.
+
+  Starts the global `Hephaestus.Instances` registry used for
+  auto-discovery of Hephaestus runtime modules.
+  """
 
   use Application
 

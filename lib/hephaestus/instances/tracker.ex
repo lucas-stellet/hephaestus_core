@@ -1,5 +1,12 @@
 defmodule Hephaestus.Instances.Tracker do
-  @moduledoc false
+  @moduledoc """
+  A GenServer that registers its parent Hephaestus module in the
+  `Hephaestus.Instances` registry on boot.
+
+  Started as a child of each `use Hephaestus` supervision tree.
+  When the tracker process dies (shutdown, crash), the Registry
+  automatically deregisters the module — no explicit cleanup needed.
+  """
 
   use GenServer
 
